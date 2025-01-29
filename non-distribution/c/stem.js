@@ -16,4 +16,7 @@ const rl = readline.createInterface({
 
 rl.on('line', function(line) {
   // Print the Porter stem from `natural` for each element of the stream.
+  const tokens = line.split(/\s+/);
+  const stems = tokens.map((token) => natural.PorterStemmer.stem(token));
+  console.log(stems.join(' '));
 });

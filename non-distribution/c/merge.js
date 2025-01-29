@@ -50,11 +50,16 @@ const rl = readline.createInterface({
 // 1. Read the incoming local index data from standard input (stdin) line by line.
 let localIndex = '';
 rl.on('line', (line) => {
+  localIndex += line + '\n';
 });
 
 rl.on('close', () => {
   // 2. Read the global index name/location, using process.argv
   // and call printMerged as a callback
+  const globalIndex = process.argv[2];
+  fs.readFile(globalIndex, 'utf8', (err, data) => {
+    printMerged(err, data);
+  });
 });
 
 const printMerged = (err, data) => {
@@ -75,13 +80,36 @@ const printMerged = (err, data) => {
 
   // 3. For each line in `localIndexLines`, parse them and add them to the `local` object where keys are terms and values contain `url` and `freq`.
   for (const line of localIndexLines) {
-    local[term] = {url, freq};
+    const [term, freq, url] = line.split('|').map((s) => s.trim());
+    if (term && freq && url) {
+      local[term] = {url, freq};
+    } else {
+      console.error('Invalid local index line:', line);
+      continue;
+    }
   }
 
   // 4. For each line in `globalIndexLines`, parse them and add them to the `global` object where keys are terms and values are arrays of `url` and `freq` objects.
   // Use the .trim() method to remove leading and trailing whitespace from a string.
   for (const line of globalIndexLines) {
-    global[term] = urlfs; // Array of {url, freq} objects
+    const [term, urlfreq] = line.split('|');
+    if (term && urlfreq) {
+    // Use a regular expression to split the string by whitespace and not have empty strings
+      const urlfsTokens = urlfreq.trim().split(/\s+/);
+      if (urlfsTokens.length % 2 !== 0) {
+        console.error('Invalid global index line:', line);
+        continue;
+      }
+      const urlfs = [];
+      for (let i = 0; i < urlfsTokens.length; i += 2) {
+        urlfs.push({url: urlfsTokens[i], freq: urlfsTokens[i + 1]});
+      }
+
+      global[term.trim()] = urlfs; // Array of {url, freq} objects
+    } else {
+      console.error('Invalid global index line:', line);
+      continue;
+    }
   }
 
   // 5. Merge the local index into the global index:
@@ -92,4 +120,16 @@ const printMerged = (err, data) => {
   //     - Add it as a new entry with the local index's data.
   // 6. Print the merged index to the console in the same format as the global index file:
   //    - Each line contains a term, followed by a pipe (`|`), followed by space-separated pairs of `url` and `freq`.
+  for (const term in local) {
+    if (term in global) {
+      global[term].push(local[term]);
+      global[term].sort(compare);
+    } else {
+      global[term] = [local[term]];
+    }
+  }
+
+  for (const term in global) {
+    console.log(term + ' | ' + global[term].map((u) => u.url + ' ' + u.freq).join(' '));
+  }
 };

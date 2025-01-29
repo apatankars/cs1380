@@ -25,12 +25,19 @@ For example, `execSync(`echo "${input}" | ./c/process.sh`, {encoding: 'utf-8'});
 */
 
 
-const fs = require('fs');
 const {execSync} = require('child_process');
 const path = require('path');
 
 
 function query(indexFile, args) {
+  const processed = execSync(`printf "${args.join(' ')}" | ./c/process.sh | ./c/stem.js`, {encoding: 'utf-8'});
+
+  // Remove leading/trailing whitespace and replace newline characters with spaces
+  const processedClean = processed.trim().replace(/[\r\n]+/g, ' ');
+
+  const indexPath = path.resolve(__dirname, indexFile);
+  const results = execSync(`grep "${processedClean}" ${indexPath}`, {encoding: 'utf-8'}).trim();
+  console.log(results);
 }
 
 const args = process.argv.slice(2); // Get command-line arguments
