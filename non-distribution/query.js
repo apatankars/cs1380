@@ -30,14 +30,29 @@ const path = require('path');
 
 
 function query(indexFile, args) {
-  const processed = execSync(`printf "${args.join(' ')}" | ./c/process.sh | ./c/stem.js`, {encoding: 'utf-8'});
+try {
+    const input = args.join(' ');
+    const processed = execSync(`printf "${input}" | ./c/process.sh | ./c/stem.js`, { encoding: 'utf-8' });
 
-  // Remove leading/trailing whitespace and replace newline characters with spaces
-  const processedClean = processed.trim().replace(/[\r\n]+/g, ' ');
+    const processedClean = processed.trim().replace(/[\r\n]+/g, ' ');
 
-  const indexPath = path.resolve(__dirname, indexFile);
-  const results = execSync(`grep "${processedClean}" ${indexPath}`, {encoding: 'utf-8'}).trim();
-  console.log(results);
+    const indexPath = path.resolve(__dirname, indexFile);
+
+    const results = execSync(`grep "${processedClean}" "${indexPath}"`, { encoding: 'utf-8' }).trim();
+
+    if (results) {
+      console.log(results);
+    } else {
+      console.log('No matches found.');
+    }
+  } catch (error) {
+    if (error.status === 1) { // grep returns exit code 1 when no matches are found
+      console.log('No matches found.');
+    } else {
+      console.error('An error occurred while searching:', error.message);
+      process.exit(1);
+    }
+  }
 }
 
 const args = process.argv.slice(2); // Get command-line arguments
