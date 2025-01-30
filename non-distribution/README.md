@@ -1,44 +1,34 @@
-# non-distribution
+# M0: Setup & Centralized Computing
 
-This milestone aims (among others) to refresh (and confirm) everyone's
-background on developing systems in the languages and libraries used in this
-course.
+> Add your contact information below and in `package.json`.
 
-By the end of this assignment you will be familiar with the basics of
-JavaScript, shell scripting, stream processing, Docker containers, deployment
-to AWS, and performance characterization—all of which will be useful for the
-rest of the project.
+* name: `Armaan Patankar`
 
-Your task is to implement a simple search engine that crawls a set of web
-pages, indexes them, and allows users to query the index. All the components
-will run on a single machine.
+* email: `armaan_patankar@brown.edu`
 
-## Getting Started
+* cslogin: `ampatank`
 
-To get started with this milestone, run `npm install` inside this folder. To
-execute the (initially unimplemented) crawler run `./engine.sh`. Use
-`./query.js` to query the produced index. To run tests, do `npm run test`.
-Initially, these will fail.
 
-### Overview
+## Summary
 
-The code inside `non-distribution` is organized as follows:
+This was a challenging first assignment for the course. I got a good grasp of how to work with JavaScript and shell. It was interesting to work with the different constructs in this language. I found it hard to really thoroughly write shell tests and make sure that they tested all of the inputs. 
 
-```
-.
-├── c            # The components of your search engine
-├── d            # Data files like the index and the crawled pages
-├── s            # Utility scripts for linting and submitting your solutions
-├── t            # Tests for your search engine
-├── README.md    # This file
-├── crawl.sh     # The crawler
-├── index.sh     # The indexer
-├── engine.sh    # The orchestrator script that runs the crawler and the indexer
-├── package.json # The npm package file that holds information like JavaScript dependencies
-└── query.js     # The script you can use to query the produced global index
-```
+My implmentation consists of 7 JavaScript components and 1 Shell component.
+<ul>
+<li>`getText.js` : This JS file is responsible with obtaining the plaintext from the HTML file
+<li>`getURLs.js` : This JS file is responsible with obtaining the links within each page to further crawl
+<li>`merge.js` : This JS file is responsible with merging the local index with the global index (hardest to implement)
+<li>`process.sh` : This shell script is responsible with processing the text into a useable and functional form
+<li>`stem.js : This JS file is responsible for obtaining the stem of the word
 
-### Submitting
+The most challenging aspect for me testing. It was hard to find inputs that thoroughly test the files and understanding the syntax took a minute. It was also a hard to write the functions/files to test the throughput of my functions. 
 
-To submit your solution, run `./scripts/submit.sh` from the root of the stencil. This will create a
-`submission.zip` file which you can upload to the autograder.
+## Correctness & Performance Characterization
+
+I characterized correctness by writing tests for `combine.sh`, `getText.js`, `getURLs.js`, `invert.sh`, `merge.js`, `process.sh`, `query.js`, and `stem.js`. These tests includes an input file that has various test cases to test the correctness and functionality of the methods. I specifically tried to use edge case inputs to ensure they work properly.
+
+*Performance*: I characterized performance using two files. I used the `throuhgput.sh` file to test the `crawler` and `indexer`. This file runs the crawler and indexer on a set corpus and times them. Once done, it measures how long it took them to run. This is then used to obtain the throughput of pages/sec. For the querier, I randomly sampled words/phrases from the global index and ran the querier. I then measured how long it took.
+
+## Wild Guess
+
+I think it will likely take 30000 lines of code. While that number is large, I think that this class will require a lot of infrastructure code that will require a lot out of us. 
