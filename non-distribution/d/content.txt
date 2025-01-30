@@ -7,4 +7,3 @@ Check out my Some more stuff [level_1b/index.html].
 Check out a few Some more more stuff [level_1c/index.html].
 
 © 2023 CS1380. All rights reserved.
-
