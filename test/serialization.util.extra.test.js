@@ -62,15 +62,13 @@ test('(5 pts) serializeRainbowObjectCirc', () => {
   expect(deserialized).toEqual(object);
 });
 
-test('(5 pts) serialize and deserialize cyclic structure with function', () => {
-  const f = function f() {};
-  const original = [f, f];
+test('(5 pts) serialize and deserialize structure with cycle-like reference', () => {
+  const x = { a: 1, b: 2, c: 3};
+  const original = { a: x, b: x};
   const serialized = util.serialize(original);
   const deserialized = util.deserialize(serialized);
 
-  expect(Array.isArray(deserialized)).toEqual(true);
-  expect(typeof deserialized[0] === 'function').toEqual(true);
-  expect(deserialized[0].name).toBe('f');
+  expect(deserialized).toEqual(original);
 });
 
 test('(5 pts) serialize and deserialize cyclic structure with function', () => {
@@ -83,7 +81,7 @@ test('(5 pts) serialize and deserialize cyclic structure with function', () => {
   expect(deserialized[0].name).toBe('f');
 });
 
-test('(5 pts) serialize and deserialize cyclic object with function', () => {
+test('(5 pts) serialize and deserialize object with function', () => {
   const f = function f() {};
   const original = {a: f, b: f};
   let serialized = util.serialize(original);

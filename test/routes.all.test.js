@@ -23,6 +23,7 @@ test('(2 pts) all.routes.put()', (done) => {
             expect(v.gotcha()).toBe('gotcha!');
           } catch (error) {
             done(error);
+            return;
           }
           distribution.local.comm.send(['gotcha'], r2, (e, v) => {
             try {
@@ -30,6 +31,7 @@ test('(2 pts) all.routes.put()', (done) => {
               expect(v.gotcha()).toBe('gotcha!');
             } catch (error) {
               done(error);
+              return;
             }
             distribution.local.comm.send(['gotcha'], r3, (e, v) => {
               expect(e).toBeFalsy();
@@ -38,6 +40,7 @@ test('(2 pts) all.routes.put()', (done) => {
                 done();
               } catch (error) {
                 done(error);
+                return;
               }
             });
           });
@@ -64,6 +67,7 @@ test('(2 pts) all.routes.put(echo)', (done) => {
         expect(v.echo()).toBe('echo!');
       } catch (error) {
         done(error);
+        return;
       }
       distribution.local.comm.send([{service: 'echo'}], r2, (e, v) => {
         try {
@@ -71,6 +75,7 @@ test('(2 pts) all.routes.put(echo)', (done) => {
           expect(v.echo()).toBe('echo!');
         } catch (error) {
           done(error);
+          return;
         }
         distribution.local.comm.send([{service: 'echo', gid: 'local'}], r3, (e, v) => {
           try {
@@ -79,6 +84,7 @@ test('(2 pts) all.routes.put(echo)', (done) => {
             done();
           } catch (error) {
             done(error);
+            return;
           }
         });
       });
