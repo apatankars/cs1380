@@ -27,8 +27,7 @@ function runQuery(queryString) {
   return execSync(`./query.js ${queryString}`, { encoding: 'utf-8' });
 }
 
-(async function main() {
-// Javascript timinng library
+function main() {
   const startTime = performance.now();
 
   queries.forEach((q) => {
@@ -43,4 +42,6 @@ function runQuery(queryString) {
 
   console.log(`${numQueries} queries in ${elapsedSec.toFixed(3)} s`);
   console.log(`Throughput: ${qps.toFixed(3)} queries/second`);
-})();
+}
+
+main();

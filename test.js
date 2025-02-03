@@ -1,6 +1,9 @@
 
-function getSerialized(type, object) {
-  return JSON.stringify({type: type, value: object});
+let util = require("@brown-ds/distribution").util;
+
+function serializeString(type, object) {
+  const value = object.replace(/"/g, '\\"').replace(/\n/g, '\\n');
+  return `{"type":"${type}","value":"${value}"}`;
 }
 
 function parseBoolean(value) {
@@ -8,23 +11,25 @@ function parseBoolean(value) {
 }
 
 function serialize(object) {
+
+  // First, we will being with the basic types
   if (typeof object === 'string') {
-    return getSerialized('string', object);
+    return serializeString('string', object);
   }
   if (typeof object === 'number') {
-    return getSerialized('number', object.toString());
+    return serializeString('number', object.toString());
   }
   if (typeof object === 'boolean') {
-    return getSerialized('boolean', object.toString());
+    return serializeString('boolean', object.toString());
   }
   if (object === null) {
-    return getSerialized('null', '');
+    return serializeString('null', '');
   }
   if (object === undefined) {
-    return getSerialized('undefined', '');
+    return serializeString('undefined', '');
   }
   if (typeof object === 'function') {
-    return getSerialized('function', object.toString());
+    return serializeString('function', object.toString());
   }
   if (typeof object === 'object') {
     let serialized = {type: null, value: {}};
@@ -43,9 +48,9 @@ function serialize(object) {
       serialized.value = {
         type: "object",
         value: {
-          name: getSerialized('string', object.name),
-          message: getSerialized('string', object.message),
-          cause: object.cause? getSerialized('string', object.cause) : getSerialized('undefined', ''),
+          name: serializeString('string', object.name),
+          message: serializeString('string', object.message),
+          cause: object.cause? serializeString('string', object.cause) : serializeString('undefined', ''),
         }
       };
       return JSON.stringify(serialized);
@@ -79,13 +84,13 @@ function deserialize(string) {
     return undefined;
   }
   if (json.type === 'function') {
-    // Need to use eval instead of Function because of arrow serialization
     return eval('(' + json.value + ')');
   }
   if (json.type === 'date') {
     return new Date(json.value);
   }
   if (json.type === 'error') {
+    console.log(deserialize(json.value.value.message));
     return new Error(deserialize(json.value.value.message));
   }
   if (json.type === 'array') {
@@ -105,7 +110,25 @@ function deserialize(string) {
   throw new Error(`Unknown type: ${json.type}`);
 }
 
-module.exports = {
-  serialize: serialize,
-  deserialize: deserialize,
-};
+const original = '\\string\n\t\r"';
+
+const serialized = util.serialize(-0);
+// const my_serialized = serialize(original);
+const deserialized = util.deserialize(serialized);
+// console.log(deserialized.func(42, 1));
+
+console.log("Serialization")
+console.log("--------------------------------")
+// console.log("My Serialized: ", my_serialized);
+console.log("Util Serialized: ", serialized);
+// console.log("Equality Check: ", my_serialized === serialized);
+console.log("Deserialization")
+console.log("--------------------------------")
+// console.log("Deserialized: ", deserialize(my_serialized).func.toString());
+console.log("Util Deserialized: ", deserialized);
+// console.log("Equality Check: ", deserialize(my_serialized) === deserialized);
+
+
+
+
+// console.log(deserialize(serialized));
