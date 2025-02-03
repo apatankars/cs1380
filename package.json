@@ -24,5 +24,33 @@
   "dependencies": {
     "@brown-ds/distribution": "^0.1.7",
     "yargs": "^17.7.2"
+  },
+"report": {
+    "hours": 10,
+    "loc": 300,
+    "dev": {
+      "cpu-no": 11,
+      "mem-gb": 7,
+      "ssd-gb": 42
+    },
+    "throughput": {
+      "dev": [],
+      "aws": []
+    },
+    "latency": {
+      "dev": [{
+        "serialization": 0.0005,
+        "deserialization": 0.0007
+      }, {
+        "serialization": 0.0051,
+        "deserialization": 0.0062
+      }, {
+        "serialization": 0.4823,
+        "deserialization": 0.5942
+      }],
+      "aws": []
+    },
+    "dloc": 30000
   }
 }
+
