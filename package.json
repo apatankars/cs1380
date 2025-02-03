@@ -48,7 +48,18 @@
         "serialization": 0.4823,
         "deserialization": 0.5942
       }],
-      "aws": []
+      "aws": [
+        {
+        "serialization": 0.0024,
+        "deserialization": 0.0018
+      }, {
+        "serialization": 0.0155,
+        "deserialization": 0.0166
+      }, {
+        "serialization": 0.9915,
+        "deserialization": 1.0344
+      }
+      ]
     },
     "dloc": 30000
   }
