@@ -16,6 +16,7 @@ There are several categories of tests:
   *	Regular Tests (`*.test.js`)
   *	Scenario Tests (`*.scenario.js`)
   *	Extra Credit Tests (`*.extra.test.js`)
+  * Student Tests (`*.student.test.js`) - inside `test/test-student`
 
 ### Running Tests
 
@@ -74,3 +75,7 @@ You can also send messages to other nodes:
 ```js
 distribution.all.comm.send(['sid'], {node: node, service: 'status', method: 'get'}, console.log); // 8cf1c
 ```
+
+# Results and Reflections
+
+> ...

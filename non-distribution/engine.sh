@@ -6,7 +6,7 @@ while read -r url; do
 
   if [[ "$url" == "stop" ]]; then
     # stop the engine if it sees the string "stop" 
-    break;
+    exit;
   fi
 
   echo "[engine] crawling $url">/dev/stderr
