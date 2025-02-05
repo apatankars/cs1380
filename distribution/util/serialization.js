@@ -1,3 +1,6 @@
+let crypto = require('crypto');
+let fs = require('fs');
+let os = require('os');
 
 function getSerialized(type, object) {
   return JSON.stringify({type: type, value: object});
@@ -7,7 +10,11 @@ function parseBoolean(value) {
   return value === 'true';
 }
 
-function serialize(object) {
+function serialize(object, seen = new Map()) {
+  const native_func = {'error': "console.error", 'warn': "console.warn", 'readFile': "fs.readFile", 'getOSType': "os.type"};
+  if (seen.has(object)) {
+    return getSerialized('register', seen.get(object))
+  }
   if (typeof object === 'string') {
     return getSerialized('string', object);
   }
@@ -24,14 +31,21 @@ function serialize(object) {
     return getSerialized('undefined', '');
   }
   if (typeof object === 'function') {
+    if (object.name === 'log' && object.toString().includes("[native code")) {
+      return getSerialized('native', "console.log");
+    } else if (native_func[object.name]) {
+      return getSerialized('native', native_func[object.name]);
+    }
     return getSerialized('function', object.toString());
   }
   if (typeof object === 'object') {
-    let serialized = {type: null, value: {}};
+    const id = crypto.randomUUID();
+    seen.set(object, id);
+    let serialized = {id: id, type: null, value: {}};
     if (Array.isArray(object)) {
       serialized.type = "array";
       for (let i = 0; i < object.length; i++) {
-        serialized.value[i] = serialize(object[i]);
+        serialized.value[i] = serialize(object[i], seen);
       }
       return JSON.stringify(serialized);
     } else if (object instanceof Date) {
@@ -52,7 +66,7 @@ function serialize(object) {
     } else {
       serialized.type = "object";
       for (let key in object) {
-        serialized.value[key] = serialize(object[key]);
+        serialized.value[key] = serialize(object[key], seen);
       }
       return JSON.stringify(serialized);
     }
@@ -60,9 +74,12 @@ function serialize(object) {
   throw new Error(`Unknown type: ${typeof object}`);
 }
 
-
-function deserialize(string) {
+function deserialize(string, seen = new Map()) {
+  const native_func = {'console.log': console.log, 'console.error': console.error, 'console.warn': console.warn, 'fs.readFile': fs.readFile, 'os.type': os.type};
   const json = JSON.parse(string);
+  if (json.type === 'native') {
+    return native_func[json.value];
+  }
   if (json.type === 'string') {
     return json.value;
   }
@@ -91,19 +108,27 @@ function deserialize(string) {
   if (json.type === 'array') {
     let array = [];
     for (let val in json.value) {
-      array.push(deserialize(json.value[val]));
+      array.push(deserialize(json.value[val], seen));
     }
     return array;
   }
   if (json.type === 'object') {
+    if (seen.has(json.id)) {
+      return seen.get(json.id);
+    }
     let object = {};
+    seen.set(json.id, object);
     for (let key in json.value) {
-      object[key] = deserialize(json.value[key]);
+      object[key] = deserialize(json.value[key], seen);
     }
     return object;
   }
+  if (json.type === "register") {
+    return seen.get(json.value);
+  }
   throw new Error(`Unknown type: ${json.type}`);
 }
+
 
 module.exports = {
   serialize: serialize,
