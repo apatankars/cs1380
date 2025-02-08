@@ -95,10 +95,10 @@ test('(5 pts) (scenario) use rpc', (done) => {
 
   const node = {ip: '127.0.0.1', port: 9009};
 
-  // ...
+  let addOneRPC = '?';
 
   const rpcService = {
-    addOne: addOne,
+    addOne: addOneRPC,
   };
 
   distribution.node.start((server) => {

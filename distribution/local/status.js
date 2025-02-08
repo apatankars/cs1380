@@ -11,18 +11,6 @@ global.moreStatus = {
 
 status.get = function(configuration, callback) {
   callback = callback || function() { };
-  // TODO: implement remaining local status items
-
-
-  if (configuration === 'heapTotal') {
-    callback(null, process.memoryUsage().heapTotal);
-    return;
-  }
-  if (configuration === 'heapUsed') {
-    callback(null, process.memoryUsage().heapUsed);
-    return;
-  }
-  callback(new Error('Status key not found'));
 };
 
 

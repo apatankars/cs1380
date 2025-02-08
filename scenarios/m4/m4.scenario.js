@@ -126,7 +126,6 @@ test('(5 pts) (scenario) use mem.reconf', (done) => {
                 checkPlacement();
               });
             });
-      });
     });
   });
 

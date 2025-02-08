@@ -8,10 +8,10 @@ const allNodes = [n1, n2, n3];
 
 
 test('(5 pts) (scenario) create group', (done) => {
-  /*
-                  Create a group with the nodes n1, n2, and n3.
-                  Then, fetch their NIDs using the distributed status service.
-              */
+/*
+    Create a group with the nodes n1, n2, and n3.
+    Then, fetch their NIDs using the distributed status service.
+*/
 
   const groupA = {};
   groupA[id.getSID(n1)] = n1;
@@ -28,11 +28,11 @@ test('(5 pts) (scenario) create group', (done) => {
 });
 
 test('(5 pts) (scenario) dynamic group membership', (done) => {
-  /*
-            Dynamically add a node (n3) to groupB after the group is initially created
-            with nodes n1 and n2. Validate that the distributed status service reflects
-            the updated group membership on all nodes.
-        */
+/*
+  Dynamically add a node (n3) to groupB after the group is initially created
+  with nodes n1 and n2. Validate that the distributed status service reflects
+  the updated group membership on all nodes.
+*/
   const groupB = {};
   const initialNodes = [n1, n2];
   const allNodes = [n1, n2, n3];
@@ -54,16 +54,15 @@ test('(5 pts) (scenario) dynamic group membership', (done) => {
           done(error);
         }
       });
-    });
   });
 });
 
 
 test('(5 pts) (scenario) group relativity', (done) => {
-  /*
-      Make it so that node n1 sees group groupC as containing only n2.
-      while node n2 sees group groupC as containing n1 and n2.
-  */
+/*
+    Make it so that node n1 sees group groupC as containing only n2.
+    while node n2 sees group groupC as containing n1 and n2.
+*/
   const groupC = {};
   // Create groupC in an appropriate way...
 
@@ -94,17 +93,17 @@ test('(5 pts) (scenario) group relativity', (done) => {
 });
 
 test('(5 pts) (scenario) use the gossip service', (done) => {
-  /*
-      First, create group groupD a number of nodes of your choosing.
-      Then, using the groups.put method,  a new group is created called 'newgroup'.
-      Add a new node to 'newgroup' using the gossip service to propagate the new group membership to all (or a subset of) nodes in groupD.
+/*
+    First, create group groupD a number of nodes of your choosing.
+    Then, using the groups.put method,  a new group is created called 'newgroup'.
+    Add a new node to 'newgroup' using the gossip service to propagate the new group membership to all (or a subset of) nodes in groupD.
 
-      Experiment with:
-      1. The number of nodes in groupD
-      2. The subset function used in the gossip service
-      3. The expected number of nodes receiving the new group membership
-      4. The time delay between adding the new node to 'newgroup' and checking the group membership in groupD
-  */
+    Experiment with:
+    1. The number of nodes in groupD
+    2. The subset function used in the gossip service
+    3. The expected number of nodes receiving the new group membership
+    4. The time delay between adding the new node to 'newgroup' and checking the group membership in groupD
+*/
 
   // Create groupD in an appropriate way...
   const groupD = {};
