@@ -144,9 +144,7 @@ test('(4 pts) serialize and deserialize undefined', () => {
 
 test('(4 pts) serialize and deserialize special string', () => {
   const original = '\\string\n\t\r"';
-  console.log(original);
   const serialized = util.serialize(original);
-  console.log(serialized);
   expect(original).toEqual(util.deserialize(serialized));
 });
 

@@ -1,7 +1,8 @@
 const http = require('http');
 const url = require('url');
 const log = require('../util/log');
-
+const routes = require('../local/routes');
+const util = require('../util/util');
 
 /*
     The start function will be called to start your node.
@@ -15,7 +16,7 @@ const start = function(callback) {
     /* Your server will be listening for PUT requests. */
 
     // Write some code...
-
+    res.writeHead(200, { 'Content-Type': 'application/json' });
 
     /*
       The path of the http request will determine the service to be used.
@@ -24,7 +25,11 @@ const start = function(callback) {
 
 
     // Write some code...
-
+    let parsedUrl = url.parse(req.url);
+    let path = parsedUrl.pathname; // /service/method
+    let pathParts = path.split('/').filter(Boolean); // Remove empty parts
+    let service = pathParts[1];
+    let method = pathParts[2];
 
     /*
 
@@ -46,10 +51,10 @@ const start = function(callback) {
     let body = [];
 
     req.on('data', (chunk) => {
+      body.push(chunk);
     });
 
     req.on('end', () => {
-
       /* Here, you can handle the service requests. 
       Use the local routes service to get the service you need to call.
       You need to call the service with the method and arguments provided in the request.
@@ -57,10 +62,51 @@ const start = function(callback) {
       */
 
       // Write some code...
-
-
-
-    });
+      let bodyData = Buffer.concat(body).toString();
+      let args = [];
+      try {
+        serialized_args = JSON.parse(bodyData);
+        args = util.deserialize(serialized_args);
+      } catch (e) {
+        log(`Error parsing JSON: ${e}`);
+      }
+      routes.get(service, (err, service) => {
+        if (err) {
+          // Couldn’t get the service
+          res.end(JSON.stringify(util.serialize([err, null])));
+        } else {
+          // Wrap the call in a try/catch in case the method call throws synchronously
+          if (service[method] === undefined) {
+            res.end(JSON.stringify(util.serialize([new Error(`Method ${method} not found`), null])));
+          } else {
+          try {
+            if (args.length > 0) {
+              service[method](...args, (error, value) => {
+                // Once we have our callback invoked, we can respond
+                if (error) {
+                  res.end(JSON.stringify(util.serialize([error, null])));
+                } else {
+                res.end(JSON.stringify(util.serialize([null, value])));
+                }
+              });
+            } else {
+              service[method]((error, value) => {
+                if (error) {
+                  res.end(JSON.stringify(util.serialize([new Error(error), null])));
+                } else {
+                res.end(JSON.stringify(util.serialize([null, value])));
+                }
+              });
+            }
+          } catch (e) {
+            // If service[method] threw an error before calling any callback
+            res.end(JSON.stringify(util.serialize([e, null])));
+          }
+        }
+        }
+      });
+    }
+  );
   });
 
 

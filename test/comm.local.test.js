@@ -30,6 +30,7 @@ test('(10 pts) comm: status.get()', (done) => {
     try {
       expect(e).toBeFalsy();
       expect(v).toBe(id.getSID(node));
+      console.log(v);
       done();
     } catch (error) {
       done(error);

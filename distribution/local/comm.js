@@ -1,7 +1,15 @@
 /** @typedef {import("../types").Callback} Callback */
 /** @typedef {import("../types").Node} Node */
+const http = require('http');
+const util = require("../util/util");
 
-
+const cb = (e, v) => {
+    if (e) {
+        console.error(e);
+    } else {
+        console.log(v);
+    }
+};
 
 /**
  * @typedef {Object} Target
@@ -17,6 +25,76 @@
  * @return {void}
  */
 function send(message, remote, callback) {
+    callback = callback || cb;
+    if (message === undefined || message === null) {
+        message = ['nid'];
+    }
+    if (remote === undefined || remote === null || !remote.node) {
+        remote = { node: global.nodeConfig, service: 'status', method: 'get' };
+    }
+    if (!remote.service || !remote.method) { 
+        remote.service = 'status';
+        remote.method = 'get';
+    }
+    let gid = remote.gid || "local";
+    let service = remote.service;
+    let method = remote.method;
+    let nodeConfig = remote.node; // {ip: , port: }
+
+    const path = `/${gid}/${service}/${method}`;
+
+    const options = {
+        hostname: nodeConfig.ip,
+        port: nodeConfig.port,
+        path: path,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' }
+    };
+
+    const req = http.request(options, (res) => {
+
+        // First we process the response by listening for data events
+        let chunks = [];
+
+        res.on('data', (chunk) => {
+            chunks.push(chunk);
+        });
+
+        // Once all of the data has been processed, we can parse it
+        res.on('end', () => {
+            let body = Buffer.concat(chunks).toString();
+            let parsed;
+            try {
+                parsed = JSON.parse(body);
+                parsed = util.deserialize(parsed);
+            } catch (e) {
+                callback(new Error('Failed to parse JSON response'), null);
+                return;
+            }
+            
+            // The remote node typically returns [error, value]
+            if (!Array.isArray(parsed) || parsed.length !== 2) {
+                return callback(new Error('Invalid response format: ' + body));
+            }
+            let [err, val] = parsed;
+
+            // If the remote serialized an error, it might be a string or an object
+            if (err) {
+                return callback(err instanceof Error ? err : new Error(err), null);
+            }
+
+            // No error => pass the value
+            callback(null, val);
+        });
+    })
+
+    req.on('error', (e) => {
+        callback(e, null);
+    });
+
+    // Send the message as a JSON string
+    req.write(JSON.stringify(util.serialize(message)));
+    req.end();
 }
 
 module.exports = {send};
