@@ -45,6 +45,9 @@ function put(service, configuration, callback) {
         callback(new Error('Service cannot be null or undefined'), null);
         return;
         }
+    } else if (typeof service !== 'object') {
+        callback(new Error('Service must be an object'), null);
+        return;
     }
     if (configuration === undefined || configuration === null) {
         configuration = "unknown";

@@ -29,6 +29,10 @@ status.get = function(configuration, callback) {
       return;
     }
   }
+  if (typeof configuration === 'function') {
+    callback = configuration;
+    configuration = 'nid';
+  }
   switch(configuration ) {
     case 'sid':
       callback(null, global.moreStatus.sid);

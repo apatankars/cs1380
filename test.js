@@ -3,6 +3,7 @@ const local = distribution.local;
 const util = distribution.util;
 
 const cb = (e, v) => {
+    console.log(e, v);
     if (e) {
         console.error(e);
     } else {
@@ -12,16 +13,23 @@ const cb = (e, v) => {
 
 distribution.node.start(() => {
     const node = distribution.node.config;
-    const remote = {node: node, service: 'status', method: 'get'};
-    const message = ['nid']; // Arguments to the method
-    
+  const remote = {node: node, service: 'routes', method: 'put'};
+  const statusService = {get: local.status.get};
+//   const message = [statusService, 'status'];
+    const message = ['invalid'];
     local.comm.send(message, remote, cb);
 
-    const message2 = ['heapUsed']; // Arguments to the method
-    local.comm.send(message2, remote, cb);
-
-    const message3 = ['invalid']; // Arguments to the method
-    local.comm.send(message3, remote, cb);
+    // const remote2 = {node: node, service: 'routes', method: 'get'};
+    // const message2 = ['status'];
+    // local.comm.send(message2, remote2, (err, service) => {
+    //     if (err) {
+    //         console.error(err);
+    //     } else {
+    //         service.get('nid', (e, v) => {
+    //             console.log(e, v);
+    //         });
+    //     }
+    // });
 });
 
 //  const message = ['nid'];
