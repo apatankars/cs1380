@@ -63,8 +63,8 @@ test('(5 pts) serializeRainbowObjectCirc', () => {
 });
 
 test('(5 pts) serialize and deserialize structure with cycle-like reference', () => {
-  const x = { a: 1, b: 2, c: 3};
-  const original = { a: x, b: x};
+  const x = {a: 1, b: 2, c: 3};
+  const original = {a: x, b: x};
   const serialized = util.serialize(original);
   const deserialized = util.deserialize(serialized);
 

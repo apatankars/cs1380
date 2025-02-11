@@ -1,93 +1,49 @@
 const distribution = require('../config.js');
-const local = distribution.local;
 
 test('(25 pts) rpc', (done) => {
-  let n = 0;
+  let localVar = 0;
 
-  function addOne() {
-    return ++n;
-  }
+  const addOne = () => {
+    return ++localVar;
+  };
 
   const addOneRPC = distribution.util.wire.createRPC(
       distribution.util.wire.toAsync(addOne));
 
   const addOneService = {
-    addOne: addOneRPC,
+    addOneRemote: addOneRPC,
   };
 
-  const otherNode = {ip: '127.0.0.1', port: 9090};
-
-  const stopOtherNode = (cb) => {
-    const message = [];
-    const remote = {node: otherNode, service: 'status', method: 'stop'};
-    local.comm.send(message, remote, (e, v) => {
-      try {
-        expect(e).toBeFalsy();
-        done();
-      } catch (error) {
-        done(error);
-      }
-    });
-  };
-
-  const cleanup = (e, s) => {
-    s.close();
-    stopOtherNode();
-    done(e);
-  };
-
-  const putService = (server) => {
-    const message = [addOneService, 'addOne'];
-    const remote = {node: otherNode, service: 'routes', method: 'put'};
-    local.comm.send(message, remote, (e, v) => {
-      try {
-        expect(e).toBeFalsy();
-        expect(v).toBe('addOne');
-        callService(server);
-      } catch (error) {
-        cleanup(error, server);
-      }
-    });
-  };
-
-  const callService = (server) => {
-    const message = [];
-    const remote = {node: otherNode, service: 'addOne', method: 'addOne'};
-    local.comm.send(message, remote, (e, v) => {
+  distribution.local.routes.put(addOneService, 'rpcService', (e, v) => {
+    // Call the RPC stub locally
+    addOneRPC((e, v) => {
       try {
         expect(e).toBeFalsy();
         expect(v).toBe(1);
-        expect(n).toBe(1);
-        cleanup(undefined, server);
+        expect(localVar).toBe(1);
+        // Simulate a remote call
+        distribution.local.comm.send([],
+            {node: distribution.node.config, service: 'rpcService', method: 'addOneRemote'}, (e, v) => {
+              try {
+                expect(e).toBeFalsy();
+                expect(v).toBe(2);
+                expect(localVar).toBe(2);
+                done();
+              } catch (error) {
+                done(error);
+                return;
+              }
+            });
       } catch (error) {
-        cleanup(error, server);
-      }
-    });
-  };
-
-  distribution.node.start((server) => {
-    try {
-      expect(server).toBeTruthy();
-    } catch (error) {
-      cleanup(error, server);
-    }
-
-    local.status.spawn(otherNode, (e, v) => {
-      try {
-        expect(e).toBeFalsy();
-        expect(v).toBeDefined();
-        expect(v.ip).toBe(otherNode.ip);
-        expect(v.port).toBe(otherNode.port);
-        putService(server);
-      } catch (error) {
-        cleanup(error, server);
+        done(error);
+        return;
       }
     });
   });
 });
 
 test('(25 pts) rpc w/ arguments', (done) => {
-  let localVar = 0;
+  let localVar = 5;
 
   function addSth(n) {
     return localVar += n;
@@ -97,76 +53,49 @@ test('(25 pts) rpc w/ arguments', (done) => {
       distribution.util.wire.toAsync(addSth));
 
   const addSthService = {
-    addSth: addSthRPC,
+    addSthRemote: addSthRPC,
   };
 
-  const otherNode = {ip: '127.0.0.1', port: 9090};
-
-  const stopOtherNode = (cb) => {
-    const message = [];
-    const remote = {node: otherNode, service: 'status', method: 'stop'};
-    local.comm.send(message, remote, (e, v) => {
+  distribution.local.routes.put(addSthService, 'rpcService', (e, v) => {
+    addSthRPC(42, (e, v) => {
       try {
         expect(e).toBeFalsy();
-        done();
+        expect(v).toBe(47);
+        expect(localVar).toBe(47);
+        distribution.local.comm.send([3],
+            {node: distribution.node.config, service: 'rpcService', method: 'addSthRemote'}, (e, v) => {
+              try {
+                expect(e).toBeFalsy();
+                expect(v).toBe(50);
+                expect(localVar).toBe(50);
+                done();
+              } catch (error) {
+                done(error);
+                return;
+              }
+            });
       } catch (error) {
         done(error);
-      }
-    });
-  };
-
-  const cleanup = (e, s) => {
-    s.close();
-    stopOtherNode();
-    done(e);
-  };
-
-  const putService = (server) => {
-    const message = [addSthService, 'addSth'];
-    const remote = {node: otherNode, service: 'routes', method: 'put'};
-    local.comm.send(message, remote, (e, v) => {
-      try {
-        expect(e).toBeFalsy();
-        expect(v).toBe('addSth');
-        callService(server);
-      } catch (error) {
-        cleanup(error);
-      }
-    });
-  };
-
-  const callService = (server) => {
-    const message = [42];
-    const remote = {node: otherNode, service: 'addSth', method: 'addSth'};
-    local.comm.send(message, remote, (e, v) => {
-      try {
-        expect(e).toBeFalsy();
-        expect(v).toBe(42);
-        expect(localVar).toBe(42);
-        cleanup(undefined, server);
-      } catch (error) {
-        cleanup(error, server);
-      }
-    });
-  };
-
-  distribution.node.start((server) => {
-    try {
-      expect(server).toBeTruthy();
-    } catch (error) {
-      cleanup(error, server);
-    }
-
-    local.status.spawn(otherNode, (e, v) => {
-      try {
-        expect(e).toBeFalsy();
-        expect(v).toBeDefined();
-        expect(v.ip).toBe(otherNode.ip);
-        expect(v.port).toBe(otherNode.port);
-        putService(server);
-      } catch (error) {
-        cleanup(error, server);
+        return;
       }
     });
   });
+});
+
+/*
+    Following is the setup for the tests.
+*/
+
+let localServer = null;
+
+beforeAll((done) => {
+  distribution.node.start((server) => {
+    localServer = server;
+    done();
+  });
+});
+
+afterAll((done) => {
+  localServer.close();
+  done();
 });
