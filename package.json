@@ -35,7 +35,7 @@
     },
     "throughput": {
       "dev": [{"M2": 846.74}],
-      "aws": []
+      "aws": [{"M2": 656.17}]
     },
     "latency": {
       "dev": [{"M1": [{"low":{
@@ -60,7 +60,9 @@
       }, "high":{
         "serialization": 0.9915,
         "deserialization": 1.0344
-      }}]}]
+      }}]},{"M2": {
+        "req": 1.52
+      }}]
     },
     "dloc": 30000
   }
