@@ -5,11 +5,11 @@
 global.routesTable = {};
 
 const cb = (e, v) => {
-    if (e) {
-        console.error(e);
-    } else {
-        console.log(v);
-    }
+  if (e) {
+    console.error(e);
+  } else {
+    console.log(v);
+  }
 };
 
 /**
@@ -18,16 +18,19 @@ const cb = (e, v) => {
  * @return {void}
  */
 function get(configuration, callback) {
-    callback = callback || cb;
-    if (configuration === undefined || configuration === null) {
-        configuration = 'status';
-    }
-    if (global.routesTable[configuration] === undefined) {
-        callback(new Error(`Service ${configuration} not found`), null);
-        return;
-    } else {
-        callback(null, global.routesTable[configuration]);
-    }
+  callback = callback || cb;
+  if (configuration === undefined || configuration === null) {
+    configuration = "status";
+  }
+  if (
+    global.routesTable[configuration] === undefined ||
+    global.routesTable[configuration] === null
+  ) {
+    callback(new Error(`Service ${configuration} not found`), null);
+    return;
+  } else {
+    callback(null, global.routesTable[configuration]);
+  }
 }
 
 /**
@@ -37,23 +40,23 @@ function get(configuration, callback) {
  * @return {void}
  */
 function put(service, configuration, callback) {
-    callback = callback || cb;
-    if (service === undefined || service === null) {
-        if (configuration && configuration.service) {
-            service = configuration.service;
-        } else {
-        callback(new Error('Service cannot be null or undefined'), null);
-        return;
-        }
-    } else if (typeof service !== 'object') {
-        callback(new Error('Service must be an object'), null);
-        return;
+  callback = callback || cb;
+  if (service === undefined || service === null) {
+    if (configuration && configuration.service) {
+      service = configuration.service;
+    } else {
+      callback(new Error("Service cannot be null or undefined"), null);
+      return;
     }
-    if (configuration === undefined || configuration === null) {
-        configuration = "unknown";
-    }
-    global.routesTable[configuration] = service;
-    callback(null, "");
+  } else if (typeof service !== "object") {
+    callback(new Error("Service must be an object"), null);
+    return;
+  }
+  if (configuration === undefined || configuration === null) {
+    configuration = "unknown";
+  }
+  global.routesTable[configuration] = service;
+  callback(null, "");
 }
 
 /**
@@ -61,16 +64,19 @@ function put(service, configuration, callback) {
  * @param {Callback} callback
  */
 function rem(configuration, callback) {
-    if (!configuration) {
-        callback(null, "");
-    }
-    if (global.routesTable[configuration] === undefined) {
-        callback(new Error(`Service ${configuration} does not exist`), null);
-        return;
-    } else {
-        delete global.routesTable[configuration];
-        callback(null, `Successfully removed service ${configuration}`);
-    }
-};
+  if (!configuration) {
+    callback(null, "");
+  }
+  if (
+    global.routesTable[configuration] === undefined ||
+    global.routesTable[configuration] === null
+  ) {
+    callback(new Error(`Service ${configuration} does not exist`), null);
+    return;
+  } else {
+    delete global.routesTable[configuration];
+    callback(null, `Successfully removed service ${configuration}`);
+  }
+}
 
-module.exports = {get, put, rem};
+module.exports = { get, put, rem };
