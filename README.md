@@ -22,3 +22,8 @@ I wrote 5 extra tests located in the `m2.student.js` file. These tests cover two
 
 ## Performance
 I characterized the performance of comm and RPC by sending 1000 service requests in a tight loop. Average throughput and latency is recorded in `package.json`
+
+## Key Feature
+`createRPC` is a very handy function that allows us as programmers to abstract away a lot of the complex networking that goes on behind node communication. To understand the use of `createRPC`, let's walk through an example. When you go to a restauraunt and you order a meal, you are able to order the meal without instructing the waiter on how to take your order to the kitchen, prepare it, and then they bring it out. We are able to avoid the abstraction of having to define this as we can already expect someone has set this process for us, and we can rely on it to work. This is similar to what `createRPC` does.
+When a node has a service to offer, it can call `createRPC` which essentially creates a port, or mailbox, for other nodes (clients) to call this serivce. This RPC allows the client to simply call the service and not worry about detailing how to get the right answer.
+As for the implementation, `createRPC` takes the client's agruments, your order, and serializes them, or writes your order down. The RPC then calls the service and deseralizes your argument,akin to delivering your order to the kitchen which prepares your food. Finally, the RPC then sends the result back, akin to the waiter returning your food. I hope that helps!
