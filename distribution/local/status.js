@@ -33,7 +33,7 @@ status.get = function(configuration, callback) {
     callback = configuration;
     configuration = 'nid';
   }
-  switch(configuration ) {
+  switch(configuration) {
     case 'sid':
       callback(null, global.moreStatus.sid);
       break;

@@ -7,6 +7,7 @@ In M2, I implemented basic node communication using the serialization and deseri
 <li> `local/status.js`
 <li> `local/routes.js`
 <li> `local/comm.js`
+</ul>
 
 These three files outline the above functionality and be interacted with using the `distribution.local` path. It took me a total of 10 hours to complete M2. 
 

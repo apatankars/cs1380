@@ -27,6 +27,7 @@ const cb = (e, v) => {
 function send(message, remote, callback) {
     callback = callback || cb;
     if (message === undefined || message === null) {
+        // If no message is provided, we assume the default message is a node id
         message = ['nid'];
     }
     if (remote === undefined || remote === null || !remote.node) {

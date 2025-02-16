@@ -28,8 +28,14 @@ const start = function(callback) {
     let parsedUrl = url.parse(req.url);
     let path = parsedUrl.pathname; // /service/method
     let pathParts = path.split('/').filter(Boolean); // Remove empty parts
+    let gid = pathParts[0]; // The first part of the path is the gid
     let service = pathParts[1];
     let method = pathParts[2];
+
+    let routeConfig = {
+      gid: gid,
+      service: service
+    }
 
     /*
 
@@ -71,7 +77,7 @@ const start = function(callback) {
       } catch (e) {
         log(`Error parsing JSON: ${e}`);
       }
-      routes.get(service, (err, service) => {
+      routes.get(routeConfig, (err, service) => {
         if (err) {
           // Couldn’t get the service
           res.end(JSON.stringify(util.serialize([err, null])));

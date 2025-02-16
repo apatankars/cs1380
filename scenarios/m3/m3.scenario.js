@@ -1,3 +1,4 @@
+const { group } = require('yargs');
 const distribution = require('../../config.js');
 const id = distribution.util.id;
 
@@ -5,6 +6,7 @@ const n1 = {ip: '127.0.0.1', port: 8000};
 const n2 = {ip: '127.0.0.1', port: 8001};
 const n3 = {ip: '127.0.0.1', port: 8002};
 const allNodes = [n1, n2, n3];
+
 
 
 test('(5 pts) (scenario) create group', (done) => {
@@ -15,16 +17,21 @@ test('(5 pts) (scenario) create group', (done) => {
 
   const groupA = {};
   groupA[id.getSID(n1)] = n1;
+  groupA[id.getSID(n2)] = n2;
+  groupA[id.getSID(n3)] = n3;
   // Add nodes n2 and n3 to the group...
 
   const nids = Object.values(allNodes).map((node) => id.getNID(node));
 
   // Use distribution.local.groups.put to add groupA to the local node
   // Note: The groupA.status.get call should be inside the put method's callback.
-    distribution.groupA.status.get('nid', (e, v) => {
+  distribution.local.groups.put('groupA', groupA, (error, value) => {
+    distribution.groupA.status.get(['nid'], (e, v) => {
       expect(Object.values(v)).toEqual(expect.arrayContaining(nids));
       done();
     });
+  })
+  
 });
 
 test('(5 pts) (scenario) dynamic group membership', (done) => {
@@ -38,21 +45,25 @@ test('(5 pts) (scenario) dynamic group membership', (done) => {
   const allNodes = [n1, n2, n3];
 
   // Create groupB...
+  groupB[id.getSID(n1)] = n1;
+  groupB[id.getSID(n2)] = n2;
 
   const config = {gid: 'groupB'};
 
   // Create the group with initial nodes
-  distribution.local.groups.put(config, initialNodes, (e, v) => {
+  distribution.local.groups.put('groupB', groupB, (e, v) => {
     // Add a new node dynamically to the group
+      distribution.local.groups.add('groupB', n3, (e, v) => {
 
-      distribution.groupB.status.get('nid', (e, v) => {
-        try {
-          expect(Object.values(v)).toEqual(expect.arrayContaining(
-              allNodes.map((node) => id.getNID(node))));
-          done();
-        } catch (error) {
-          done(error);
-        }
+        distribution.groupB.status.get(['nid'], (e, v) => {
+          try {
+            expect(Object.values(v)).toEqual(expect.arrayContaining(
+                allNodes.map((node) => id.getNID(node))));
+            done();
+          } catch (error) {
+            done(error);
+          }
+        });
       });
   });
 });
@@ -65,13 +76,18 @@ test('(5 pts) (scenario) group relativity', (done) => {
 */
   const groupC = {};
   // Create groupC in an appropriate way...
+  groupC[id.getSID(n1)] = n1;
+  groupC[id.getSID(n2)] = n2;
 
 
   const config = {gid: 'groupC'};
 
+  const remote = {node: n1, service: 'groups', method: 'rem'};
+
   distribution.local.groups.put(config, groupC, (e, v) => {
     distribution.groupC.groups.put(config, groupC, (e, v) => {
       // Modify the local 'view' of the group...
+        distribution.local.comm.send(['groupC', n2], remote, (e, v) => {
 
         distribution.groupC.groups.get('groupC', (e, v) => {
           const n1View = v[id.getSID(n1)];
@@ -87,6 +103,7 @@ test('(5 pts) (scenario) group relativity', (done) => {
           } catch (error) {
             done(error);
           }
+        });
         });
     });
   });
@@ -107,18 +124,25 @@ test('(5 pts) (scenario) use the gossip service', (done) => {
 
   // Create groupD in an appropriate way...
   const groupD = {};
+  groupD[id.getSID(n1)] = n1;
+  groupD[id.getSID(n2)] = n2;
 
   // How many nodes are expected to receive the new group membership?
-  let nExpected = 0;
+  let nExpected = 2;
 
   // Experiment with the subset function used in the gossip service...
-  let config = {gid: 'groupD', subset: (lst) => '?'};
+  let config = {gid: 'groupD', subset: (lst) => {
+      return Math.ceil(Math.log(lst.length));
+  }};
+
+  const newgroup = {};
+  newgroup[id.getSID(n3)] = n3;
 
   // Instantiated groupD
   distribution.local.groups.put(config, groupD, (e, v) => {
     distribution.groupD.groups.put(config, groupD, (e, v) => {
       // Created group 'newgroup' (this will be the group that we add a new node to)
-      distribution.groupD.groups.put('newgroup', {}, (e, v) => {
+      distribution.groupD.groups.put('newgroup', newgroup, (e, v) => {
         const newNode = {ip: '127.0.0.1', port: 4444};
         const message = [
           'newgroup',
@@ -128,7 +152,7 @@ test('(5 pts) (scenario) use the gossip service', (done) => {
         // Adding a new node to 'newgroup' using the gossip service
         distribution.groupD.gossip.send(message, remote, (e, v) => {
           // Experiment with the time delay between adding the new node to 'newgroup' and checking the group membership in groupD...
-          let delay = 0;
+          let delay = 100;
           setTimeout(() => {
             distribution.groupD.groups.get('newgroup', (e, v) => {
               let count = 0;

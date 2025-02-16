@@ -150,6 +150,8 @@ test('(2 pts) local.groups.put(dummy)/rem(n1)/get(dummy)', (done) => {
 
       distribution.local.groups.get('dummy', (e, v) => {
         try {
+          console.log('expectedGroup', expectedGroup);
+          console.log('v', v);
           expect(e).toBeFalsy();
           expect(v).toEqual(expectedGroup);
           done();
