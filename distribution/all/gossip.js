@@ -1,4 +1,3 @@
-
 const gossip = function(config) {
   const context = {};
   context.gid = config.gid || 'all';

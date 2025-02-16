@@ -5,7 +5,7 @@
  * @callback Mapper
  * @param {any} key
  * @param {any} value
- * @returns {object}
+ * @returns {object[]}
  */
 
 /**
@@ -13,13 +13,14 @@
  * @callback Reducer
  * @param {any} key
  * @param {Array} value
- * @returns {object | object[]}
+ * @returns {object}
  */
 
 /**
  * @typedef {Object} MRConfig
  * @property {Mapper} map
  * @property {Reducer} reduce
+ * @property {string[]} keys
  */
 
 
@@ -37,6 +38,7 @@ function mr(config) {
   /**
    * @param {MRConfig} configuration
    * @param {Callback} cb
+   * @return {void}
    */
   function exec(configuration, cb) {
   }

@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const logFile = path.join(__dirname, '../../', 'log.txt');
+const logFile = path.join('/tmp', 'log.txt');
 
 function log(message, severity) {
   if (severity === undefined) {

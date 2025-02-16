@@ -46,7 +46,11 @@ const distribution = function(config) {
   return global.distribution;
 };
 
-global.distribution = distribution;
+// Don't overwrite the distribution object if it already exists
+if (global.distribution === undefined) {
+  global.distribution = distribution;
+}
+
 distribution.util = require('./distribution/util/util.js');
 distribution.local = require('./distribution/local/local.js');
 distribution.node = require('./distribution/local/node.js');
@@ -73,7 +77,7 @@ distribution['all'].store =
     require('./distribution/all/store')({gid: 'all'});
 
 distribution.node.config = global.nodeConfig;
-module.exports = global.distribution;
+module.exports = distribution;
 
 /* The following code is run when distribution.js is run directly */
 if (require.main === module) {

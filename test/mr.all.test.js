@@ -19,7 +19,7 @@ test('(25 pts) all.mr:ncdc', (done) => {
     const words = value.split(/(\s+)/).filter((e) => e !== ' ');
     const out = {};
     out[words[1]] = parseInt(words[3]);
-    return out;
+    return [out];
   };
 
   const reducer = (key, values) => {
@@ -83,7 +83,7 @@ test('(25 pts) all.mr:avgwrdl', (done) => {
       totalLength: words.reduce((sum, word) => sum + word.length, 0),
       wordCount: words.length,
     };
-    return out;
+    return [out];
   };
 
   const reducer = (key, values) => {

@@ -2,7 +2,7 @@ const distribution = require('../config.js');
 const id = distribution.util.id;
 const local = distribution.local;
 
-test('(2 pts) local.groups.get(random)', (done) => {
+test('(1 pts) local.groups.get(random)', (done) => {
   distribution.local.groups.get('random', (e, v) => {
     try {
       expect(e).toBeDefined();
@@ -15,7 +15,7 @@ test('(2 pts) local.groups.get(random)', (done) => {
   });
 });
 
-test('(2 pts) local.groups.del(random)', (done) => {
+test('(1 pts) local.groups.del(random)', (done) => {
   distribution.local.groups.del('random', (e, v) => {
     try {
       expect(e).toBeDefined();
@@ -28,7 +28,7 @@ test('(2 pts) local.groups.del(random)', (done) => {
   });
 });
 
-test('(2 pts) local.groups.put(browncs)', (done) => {
+test('(1 pts) local.groups.put(browncs)', (done) => {
   const g = {
     '507aa': {ip: '127.0.0.1', port: 8080},
     '12ab0': {ip: '127.0.0.1', port: 8081},
@@ -244,7 +244,7 @@ test('(2 pts) local.groups.put/get/del/get()', (done) => {
   });
 });
 
-test('(3 pts) local.groups.put()/add(n2)/get()', (done) => {
+test('(2 pts) local.groups.put()/add(n2)/get()', (done) => {
   const g = {
     'al57j': {ip: '127.0.0.1', port: 8082},
     'q5mn8': {ip: '127.0.0.1', port: 8083},
@@ -271,7 +271,7 @@ test('(3 pts) local.groups.put()/add(n2)/get()', (done) => {
   });
 });
 
-test('(3 pts) local.groups.put()/rem(n2)/get()', (done) => {
+test('(2 pts) local.groups.put()/rem(n2)/get()', (done) => {
   const g = {
     'al57j': {ip: '127.0.0.1', port: 8082},
     'q5mn8': {ip: '127.0.0.1', port: 8083},

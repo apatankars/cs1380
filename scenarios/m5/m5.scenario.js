@@ -4,6 +4,12 @@ const id = distribution.util.id;
 const ncdcGroup = {};
 const dlibGroup = {};
 const tfidfGroup = {};
+const crawlGroup = {};
+const urlxtrGroup = {};
+const strmatchGroup = {};
+const ridxGroup = {};
+const rlgGroup = {};
+
 
 /*
     The local node will be the orchestrator.
@@ -14,7 +20,7 @@ const n1 = {ip: '127.0.0.1', port: 7110};
 const n2 = {ip: '127.0.0.1', port: 7111};
 const n3 = {ip: '127.0.0.1', port: 7112};
 
-test('(8 pts) (scenario) all.mr:ncdc', (done) => {
+test('(0 pts) (scenario) all.mr:ncdc', (done) => {
 /* Implement the map and reduce functions.
    The map function should parse the string value and return an object with the year as the key and the temperature as the value.
    The reduce function should return the maximum temperature for each year.
@@ -80,7 +86,7 @@ test('(8 pts) (scenario) all.mr:ncdc', (done) => {
   });
 });
 
-test('(8 pts) (scenario) all.mr:dlib', (done) => {
+test('(10 pts) (scenario) all.mr:dlib', (done) => {
 /*
    Implement the map and reduce functions.
    The map function should parse the string value and return an object with the word as the key and the value as 1.
@@ -150,7 +156,7 @@ test('(8 pts) (scenario) all.mr:dlib', (done) => {
   });
 });
 
-test('(9 pts) (scenario) all.mr:tfidf', (done) => {
+test('(10 pts) (scenario) all.mr:tfidf', (done) => {
 /*
     Implement the map and reduce functions.
     The map function should parse the string value and return an object with the word as the key and the document and count as the value.
@@ -219,6 +225,34 @@ test('(9 pts) (scenario) all.mr:tfidf', (done) => {
 });
 
 /*
+  The rest of the scenarios are left as an exercise.
+  For each one you'd like to implement, you'll need to:
+  - Define the map and reduce functions.
+  - Create a dataset.
+  - Run the map reduce.
+*/
+
+test('(10 pts) (scenario) all.mr:crawl', (done) => {
+    done(new Error('Implement this test.'));
+});
+
+test('(10 pts) (scenario) all.mr:urlxtr', (done) => {
+    done(new Error('Implement the map and reduce functions'));
+});
+
+test('(10 pts) (scenario) all.mr:strmatch', (done) => {
+    done(new Error('Implement the map and reduce functions'));
+});
+
+test('(10 pts) (scenario) all.mr:ridx', (done) => {
+    done(new Error('Implement the map and reduce functions'));
+});
+
+test('(10 pts) (scenario) all.mr:rlg', (done) => {
+    done(new Error('Implement the map and reduce functions'));
+});
+
+/*
     This is the setup for the test scenario.
     Do not modify the code below.
 */
@@ -235,6 +269,26 @@ beforeAll((done) => {
   tfidfGroup[id.getSID(n1)] = n1;
   tfidfGroup[id.getSID(n2)] = n2;
   tfidfGroup[id.getSID(n3)] = n3;
+
+  crawlGroup[id.getSID(n1)] = n1;
+  crawlGroup[id.getSID(n2)] = n2;
+  crawlGroup[id.getSID(n3)] = n3;
+
+  urlxtrGroup[id.getSID(n1)] = n1;
+  urlxtrGroup[id.getSID(n2)] = n2;
+  urlxtrGroup[id.getSID(n3)] = n3;
+
+  strmatchGroup[id.getSID(n1)] = n1;
+  strmatchGroup[id.getSID(n2)] = n2;
+  strmatchGroup[id.getSID(n3)] = n3;
+
+  ridxGroup[id.getSID(n1)] = n1;
+  ridxGroup[id.getSID(n2)] = n2;
+  ridxGroup[id.getSID(n3)] = n3;
+
+  rlgGroup[id.getSID(n1)] = n1;
+  rlgGroup[id.getSID(n2)] = n2;
+  rlgGroup[id.getSID(n3)] = n3;
 
 
   const startNodes = (cb) => {
