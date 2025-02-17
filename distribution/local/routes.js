@@ -42,7 +42,7 @@ function get(configuration, callback) {
     global.routesTable[gid][service] === undefined || 
     global.routesTable[gid][service] === null
   ) {
-    const rpc = global.toLocal[configuration.serviceName];
+    const rpc = global.toLocal[service];
     if (rpc) {
       callback(null, {call: rpc});
     } else {

@@ -62,6 +62,21 @@ groups.put = function(config, group, callback) {
         global.groupsTable['all'][sid] = group[sid];
     }
     global.groupsTable[config] = group;
+
+    // Now we can add it to the distribution object for the node
+    if (!global.distribution[config]) {
+
+        const allServices = require('../all/all.js');
+
+        let serviceObject = {};
+        for (const service in allServices) {
+            const serviceTemplate = allServices[service];
+            serviceObject[service] = serviceTemplate({gid: config});
+        }
+
+        global.distribution[config] = serviceObject;
+    }
+
     return callback(null, group);
 };
 
