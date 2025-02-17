@@ -75,6 +75,10 @@ groups.put = function(config, group, callback) {
             serviceObject[service] = serviceTemplate({gid: config});
         }
         global.distribution[config] = serviceObject;
+        global.routesTable[config] = global.routesTable[config] || {};
+        for (const service in global.distribution[config]) {
+            global.routesTable[config][service] = global.distribution[config][service];
+        }
     }
 
     return callback(null, group);

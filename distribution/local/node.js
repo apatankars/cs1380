@@ -72,44 +72,54 @@ const start = function(callback) {
       let bodyData = Buffer.concat(body).toString();
       let args = [];
       try {
-        serialized_args = JSON.parse(bodyData);
-        args = util.deserialize(serialized_args);
+        const parsed = JSON.parse(bodyData);
+        args = util.deserialize(parsed);
       } catch (e) {
         log(`Error parsing JSON: ${e}`);
       }
-      routes.get(routeConfig, (err, service) => {
+      routes.get(routeConfig, (err, serviceObj) => {
         if (err) {
           // Couldn’t get the service
           res.end(JSON.stringify(util.serialize([err, null])));
         } else {
           // Wrap the call in a try/catch in case the method call throws synchronously
-          if (service[method] === undefined) {
+          if (!serviceObj[method]) {
             res.end(JSON.stringify(util.serialize([new Error(`Method ${method} not found`), null])));
-          } else {
+            return
+          } 
+          const distributedFlag = gid && gid !== 'local'
+
+          const formatResp = (error, value) => {
+            if (distributedFlag) {
+              const errMap = error || {}
+              const resMap = value || {}
+              res.end(JSON.stringify(util.serialize([errMap, resMap])));
+            } else {
+              if (error) {
+                res.end(JSON.stringify(util.serialize([error, null])));
+              } else {
+                res.end(JSON.stringify(util.serialize([null, value])));
+              }
+            }
+          }
+
+
+
           try {
             if (args.length > 0) {
-              service[method](...args, (error, value) => {
-                // Once we have our callback invoked, we can respond
-                if (error) {
-                  res.end(JSON.stringify(util.serialize([error, null])));
-                } else {
-                res.end(JSON.stringify(util.serialize([null, value])));
-                }
+              serviceObj[method](...args, (error, value) => {
+                formatResp(error, value);
               });
             } else {
-              service[method]((error, value) => {
-                if (error) {
-                  res.end(JSON.stringify(util.serialize([new Error(error), null])));
-                } else {
-                res.end(JSON.stringify(util.serialize([null, value])));
-                }
+              serviceObj[method]((error, value) => {
+                formatResp(error, value);
               });
             }
           } catch (e) {
             // If service[method] threw an error before calling any callback
             res.end(JSON.stringify(util.serialize([e, null])));
           }
-        }
+        
         }
       });
     }

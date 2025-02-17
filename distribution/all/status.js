@@ -77,7 +77,7 @@ const status = function(config) {
           callback(errMap, null);
           return;
         }
-        distribution.local.comm.stop((err, val) => {
+        distribution.local.status.stop((err, val) => {
           if (err) { 
             callback(err, null);
             return;

@@ -64,13 +64,7 @@ function put(service, configuration, callback = cb) {
   let gid = "local";
 
   if (!service) {
-    if (configuration?.service) {
-      gid = configuration.gid || gid;
-      service = configuration.service;
-      configuration = "";
-    } else {
       return callback(new Error("Service cannot be null or undefined"));
-    }
   } else if (typeof service !== "object") {
     return callback(new Error("Service must be an object"));
   }

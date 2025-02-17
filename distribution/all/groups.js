@@ -1,5 +1,3 @@
-const distribution = require("../../config");
-
 const groups = function(config) {
   const context = {};
   context.gid = config.gid || 'all';
@@ -30,12 +28,12 @@ const groups = function(config) {
         method: 'put',
       }
       const message = [config, group];
-      distribution[context.gid].comm.send(message, remoteConfig, (errMap, resMap) => {
+      global.distribution[context.gid].comm.send(message, remoteConfig, (errMap, resMap) => {
         if (Object.keys(errMap).length > 0) {
           callback(errMap, null);
           return;
         }
-        callback(null, `Added group ${config} to all nodes within the ${context.gid} group`);
+        callback(errMap, `Added group ${config} to all nodes within the ${context.gid} group`);
       });
     },
 
@@ -55,10 +53,10 @@ const groups = function(config) {
       const message = [name];
       distribution[context.gid].comm.send(message, remoteConfig, (errMap, resMap) => {
         if (Object.keys(errMap).length > 0) {
-          callback(errMap, null);
+          callback(errMap, resMap);
           return;
         }
-        callback(null, `Removed group ${name} from all nodes within the ${context.gid} group`);
+        callback(errMap, `Removed group ${name} from all nodes within the ${context.gid} group`);
       });
     },
 
@@ -81,7 +79,7 @@ const groups = function(config) {
           callback(errMap, null);
           return;
         }
-        callback(null, resMap);
+        callback(errMap, resMap);
       });
     },
 
@@ -107,7 +105,7 @@ const groups = function(config) {
           callback(errMap, null);
           return;
         }
-        callback(null, `Added node ${node} to group ${name}`);
+        callback(errMap, `Added node ${node} to group ${name}`);
       });
     },
 
@@ -130,10 +128,10 @@ const groups = function(config) {
       const message = [name, node];
       distribution[context.gid].comm.send(message, remoteConfig, (errMap, resMap) => {
         if (Object.keys(errMap).length > 0) {
-          callback(errMap, null);
+          callback(errMap, resMap);
           return;
         }
-        callback(null, `Removed node ${node} from group ${name}`);
+        callback(errMap, `Removed node ${node} from group ${name}`);
       });
     },
   };

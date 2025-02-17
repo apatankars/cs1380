@@ -81,12 +81,16 @@ function send(message, remote, callback) {
             let [err, val] = parsed;
 
             // If the remote serialized an error, it might be a string or an object
-            if (err) {
-                return callback(err instanceof Error ? err : new Error(err), null);
+            if (err && (err instanceof Error || (typeof err === 'string' && err.trim() !== '') || (typeof err === 'object' && Object.keys(err).length > 0))) {
+                return callback(err instanceof Error ? err : new Error(typeof err === 'string' ? err : JSON.stringify(err)), null);
             }
 
             // No error => pass the value
-            callback(null, val);
+            if (gid !== 'local') {
+                callback(err, val);
+            } else {
+                callback(null, val);
+            }
         });
     })
 
