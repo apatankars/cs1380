@@ -31,11 +31,12 @@ function send(message, remote, callback) {
         message = ['nid'];
     }
     if (remote === undefined || remote === null || !remote.node) {
-        remote = { node: global.nodeConfig, service: 'status', method: 'get' };
+        callback(new Error('Remote node configuration is required'), null);
+        return;
     }
     if (!remote.service || !remote.method) { 
-        remote.service = 'status';
-        remote.method = 'get';
+        callback(new Error('Service and method are required'), null);
+        return;
     }
     let gid = remote.gid || "local";
     let service = remote.service;

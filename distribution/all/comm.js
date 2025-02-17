@@ -1,5 +1,7 @@
 /** @typedef {import("../types").Callback} Callback */
 
+const local = distribution.local;
+
 /**
  * NOTE: This Target is slightly different from local.all.Target
  * @typdef {Object} Target
@@ -21,6 +23,50 @@ function comm(config) {
    * @param {Callback} callback
    */
   function send(message, configuration, callback) {
+    if (message === undefined || message === null) {
+      // If no message is provided, we assume the default message is a node id
+      message = ['nid'];
+    }
+    if (configuration === undefined || configuration === null || !configuration.service || !configuration.method
+    ) {
+      callback(new Error('Remote configuration is required'), null);
+      return;
+    }
+    let service = configuration.service;
+    let method = configuration.method;
+
+    let errorMap = {};
+    let responseMap = {};
+    let responseCount = 0;
+
+    distribution.local.groups.get(context.gid, (err, group) => {
+      if (err) {
+        callback(err, null);
+        return;
+      }
+
+      responseCount = Object.keys(group).length;
+
+      Object.entries(group).forEach(([sid, node]) => {
+        let config = {
+          service: service,
+          method: method,
+          node: node,
+        }
+        local.comm.send(message, config, (error, response) => {
+          if (error) {
+            errorMap[sid] = error;
+          } else {
+            responseMap[sid] = response;
+          }
+          responseCount--;
+          if (responseCount === 0) {
+            callback(errorMap, responseMap);
+          }
+        })
+      })
+    });
+
   }
 
   return {send};

@@ -42,8 +42,13 @@ function get(configuration, callback) {
     global.routesTable[gid][service] === undefined || 
     global.routesTable[gid][service] === null
   ) {
-    callback(new Error(`Service ${service} in the ${gid} group does not exist`), null);
-    return;
+    const rpc = global.toLocal[configuration.serviceName];
+    if (rpc) {
+      callback(null, {call: rpc});
+    } else {
+      callback(new Error(`Service ${service} in the ${gid} group does not exist`), null);
+      return;
+    }
   } else {
     callback(null, global.routesTable[gid][service]);
   }
