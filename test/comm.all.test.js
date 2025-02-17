@@ -20,14 +20,12 @@ const n5 = {ip: '127.0.0.1', port: 9005};
 const n6 = {ip: '127.0.0.1', port: 9006};
 
 test.only('(2 pts) all.comm.send(status.get(nid))', (done) => {
-  
   const nids = Object.values(mygroupGroup).map((node) => id.getNID(node));
   const remote = {service: 'status', method: 'get'};
 
   distribution.mygroup.comm.send(['nid'], remote, (e, v) => {
     expect(e).toEqual({});
     try {
-      console.log("In the test");
       expect(Object.values(v).length).toBe(nids.length);
       expect(Object.values(v)).toEqual(expect.arrayContaining(nids));
       done();
@@ -79,7 +77,6 @@ test('(2 pts) all.comm.send(status.get(random))', (done) => {
 });
 
 beforeAll((done) => {
-  jest.setTimeout(1000000);
   // First, stop the nodes if they are running
   const remote = {service: 'status', method: 'stop'};
 
