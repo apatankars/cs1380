@@ -24,4 +24,8 @@ if (useLibrary) {
   distribution = require('./distribution'); // Local implementation
 }
 
+if (require.main === module) {
+  distribution.node.start(distribution.node.config.onStart);
+}
+
 module.exports = distribution;

@@ -130,9 +130,11 @@ beforeAll((done) => {
           .put(mygroupConfig, mygroupGroup, (e, v) => {
             distribution.local.groups
                 .put(group4Config, group4Group, (e, v) => {
-                  done();
+                  distribution.group4.groups.put(group4Config, group4Group, (e, v) => {
+                    done();
+                  });
                 });
-          });
+              });
     };
 
     // Start the nodes

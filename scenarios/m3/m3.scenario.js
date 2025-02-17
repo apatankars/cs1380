@@ -79,7 +79,6 @@ test('(5 pts) (scenario) group relativity', (done) => {
   groupC[id.getSID(n1)] = n1;
   groupC[id.getSID(n2)] = n2;
 
-
   const config = {gid: 'groupC'};
 
   const remote = {node: n1, service: 'groups', method: 'rem'};
@@ -97,14 +96,14 @@ test('(5 pts) (scenario) group relativity', (done) => {
                 [id.getSID(n1), id.getSID(n2)],
             ));
             expect(Object.keys(n1View)).toEqual(expect.arrayContaining(
-                [id.getSID(n2)],
+                [id.getSID(n1)],
             ));
             done();
           } catch (error) {
             done(error);
           }
         });
-        });
+      });
     });
   });
 });

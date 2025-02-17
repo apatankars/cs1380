@@ -1,4 +1,3 @@
-const routes = require('../local/routes');
 const id = distribution.util.id;
 const groups = {};
 
@@ -111,7 +110,6 @@ groups.del = function(name, callback) {
 };
 
 /**
- * 
  * @param {*} name 
  * @param {*} node 
  * @param {*} callback 
@@ -128,15 +126,21 @@ groups.add = function(name, node, callback) {
     } else if (typeof name !== 'string') {
         return callback(new Error('Invalid group name'));
     }
+
     if (typeof node !== 'object') {
         return callback(new Error('Invalid node object'));
     }
     if (global.groupsTable[name]) {
         global.groupsTable[name][id.getSID(node)] = node;
         global.groupsTable['all'][id.getSID(node)] = node;
-        return callback(null, global.groupsTable[name]);
+        return callback(null, global.groupsTable[name][id.getSID(node)]);
     } else {
-        return callback(new Error('Group not found'));
+        this.put(name, {[id.getSID(node)]: node}, (e, v) => {
+            if (e) {
+                return callback(e);
+            }
+            return callback(null, global.groupsTable[name][id.getSID(node)]);
+        });
     }
 };
 

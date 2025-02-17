@@ -18,7 +18,7 @@ const group3Group = {};
 */
 let localServer = null;
 
-const n1 = {ip: '127.0.0.1', port: 8000};
+const n1 = {ip: '127.0.0.1', port: 8008};
 const n2 = {ip: '127.0.0.1', port: 8001};
 const n3 = {ip: '127.0.0.1', port: 8002};
 const n4 = {ip: '127.0.0.1', port: 8003};
@@ -32,18 +32,6 @@ const startNodes = () => {
   mygroupGroup[id.getSID(n2)] = n2;
   mygroupGroup[id.getSID(n3)] = n3;
 
-  group1Group[id.getSID(n4)] = n4;
-  group1Group[id.getSID(n5)] = n5;
-  group1Group[id.getSID(n6)] = n6;
-
-  group4Group[id.getSID(n1)] = n1;
-  group4Group[id.getSID(n3)] = n3;
-  group4Group[id.getSID(n5)] = n5;
-
-  group3Group[id.getSID(n2)] = n2;
-  group3Group[id.getSID(n4)] = n4;
-  group3Group[id.getSID(n6)] = n6;
-
   group4Group[id.getSID(n1)] = n1;
   group4Group[id.getSID(n2)] = n2;
   group4Group[id.getSID(n4)] = n4;
@@ -54,26 +42,13 @@ const startNodes = () => {
 
     const groupInstantiation = (e, v) => {
       const mygroupConfig = {gid: 'mygroup'};
-      const group1Config = {gid: 'group1', hash: id.naiveHash};
-      const group2Config = {gid: 'group2', hash: id.consistentHash};
-      const group3Config = {gid: 'group3', hash: id.rendezvousHash};
       const group4Config = {gid: 'group4'};
 
       // Create some groups
       distribution.local.groups
           .put(mygroupConfig, mygroupGroup, (e, v) => {
             distribution.local.groups
-                .put(group1Config, group1Group, (e, v) => {
-                  distribution.local.groups
-                      .put(group2Config, group2Group, (e, v) => {
-                        distribution.local.groups
-                            .put(group3Config, group3Group, (e, v) => {
-                              distribution.local.groups
-                                  .put(group4Config, group4Group, (e, v) => {
-                                    console.log('Groups created');
-                                  });
-                            });
-                      });
+                .put(group4Config, group4Group, (e, v) => {
                 });
           });
     };
@@ -87,9 +62,19 @@ const startNodes = () => {
               distribution.local.status.spawn(n6, (e, v) => {
                 groupInstantiation(e, v);
 
-                console.log("Distribution Object: ", distribution);
-                console.log("Distribution Local Object: ", distribution.local);
-                console.log("Distribution Local Groups Object: ", distribution['mygroup'].comm);
+                // console.log("Distribution Object: ", distribution);
+                // console.log("Distribution Local Object: ", distribution.local);
+                // console.log("Distribution Local Groups Object: ", distribution['mygroup']);
+
+                distribution.mygroup.status.get('nid', (e, v) => {
+                  // console.log("Group NIDs: ", v);
+                  // console.log("Group error: ", e);
+                });
+
+                // distribution.group4.status.get(['nid'], (e, v) => {
+                //   console.log("Group 4 NIDs: ", v);
+                //   console.log("Group 4 error: ", e);
+                // });
 
                 cleanUp();
               });
@@ -102,7 +87,7 @@ const startNodes = () => {
   };
 
 const cleanUp = () => {
-  // distribution.mygroup.status.stop((e, v) => {
+  distribution.mygroup.status.stop((e, v) => {
     const remote = {service: 'status', method: 'stop'};
     remote.node = n1;
     distribution.local.comm.send([], remote, (e, v) => {
@@ -122,12 +107,12 @@ const cleanUp = () => {
           });
         });
       });
-    // });
+    });
   });
 }
 
 // Test the groups
-// startNodes();
-cleanUp();
+startNodes();
+// cleanUp();
 
 

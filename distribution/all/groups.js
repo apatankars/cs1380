@@ -29,11 +29,7 @@ const groups = function(config) {
       }
       const message = [config, group];
       global.distribution[context.gid].comm.send(message, remoteConfig, (errMap, resMap) => {
-        if (Object.keys(errMap).length > 0) {
-          callback(errMap, null);
-          return;
-        }
-        callback(errMap, `Added group ${config} to all nodes within the ${context.gid} group`);
+        callback(errMap, resMap);
       });
     },
 
@@ -52,11 +48,7 @@ const groups = function(config) {
       }
       const message = [name];
       distribution[context.gid].comm.send(message, remoteConfig, (errMap, resMap) => {
-        if (Object.keys(errMap).length > 0) {
-          callback(errMap, resMap);
-          return;
-        }
-        callback(errMap, `Removed group ${name} from all nodes within the ${context.gid} group`);
+        callback(errMap, resMap);
       });
     },
 
@@ -75,10 +67,6 @@ const groups = function(config) {
       }
       const message = [name];
       distribution[context.gid].comm.send(message, remoteConfig, (errMap, resMap) => {
-        if (Object.keys(errMap).length > 0) {
-          callback(errMap, null);
-          return;
-        }
         callback(errMap, resMap);
       });
     },
@@ -101,11 +89,7 @@ const groups = function(config) {
       }
       const message = [name, node];
       distribution[context.gid].comm.send(message, remoteConfig, (errMap, resMap) => {
-        if (Object.keys(errMap).length > 0) {
-          callback(errMap, null);
-          return;
-        }
-        callback(errMap, `Added node ${node} to group ${name}`);
+        callback(errMap, resMap);
       });
     },
 
@@ -116,22 +100,26 @@ const groups = function(config) {
           name = name.gid;
         } 
       } else if (typeof name !== 'string') {
-        return callback(new Error('Invalid group name'));
+        return callback({err: new Error('Invalid group name')});
       }
-      if (typeof node !== 'object' || node.ip === undefined || node.port === undefined) {
-        return callback(new Error('Invalid node object'));
+      let key;
+      if (typeof node === 'object') {
+        if (!node.ip || !node.port) {
+          return callback({key: new Error('Invalid node object')});
+        }
+          key = id.getSID(node);
+      } else if (typeof node === 'string') {
+          key = node;
+      } else {
+          return callback({key: new Error('Invalid node object')}, {});
       }
       const remoteConfig = {
         service: 'groups',
         method: 'rem',
       }
-      const message = [name, node];
+      const message = [name, key];
       distribution[context.gid].comm.send(message, remoteConfig, (errMap, resMap) => {
-        if (Object.keys(errMap).length > 0) {
-          callback(errMap, resMap);
-          return;
-        }
-        callback(errMap, `Removed node ${node} from group ${name}`);
+        callback(errMap, resMap);
       });
     },
   };

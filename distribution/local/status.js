@@ -20,17 +20,8 @@ const cb = (e, v) => {
 status.get = function(configuration, callback) {
   callback = callback || cb;
   if (!configuration) {
-    if (typeof callback !== 'function') {
-      configuration = callback;
-      callback = cb;
-    } else {
-      callback(null, "No configuration specified");
-      return;
-    }
-  }
-  if (typeof configuration === 'function') {
-    callback = configuration;
-    configuration = 'nid';
+    callback(new Error('Configuration is required'), {});
+    return;
   }
   switch(configuration) {
     case 'sid':

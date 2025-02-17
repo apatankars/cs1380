@@ -14,41 +14,38 @@ const status = function(config) {
     get: (configuration, callback) => {
       callback = callback || cb;
       if (configuration === undefined || configuration === null ){
-        callback(new Error('Configuration is required'), null);
+        callback({err: new Error('Configuration is required')}, {});
         return;
       }
       const remoteConfig = {
         service: 'status',
         method: 'get',
       }
-      distribution[context.gid].comm.send([configuration], remoteConfig, (errMap, resMap) => {
-        if (Object.keys(errMap).length > 0) {
-          callback(errMap, null);
-          return;
-        }
+      distribution[context.gid].comm.send(configuration, remoteConfig, (errMap, resMap) => {
         if (configuration === 'heapTotal' || configuration === 'heapUsed') {
           const total = 0;
           for (const key in resMap) {
             total += resMap[key];
           }
+          resMap = {res: total};
         }
-        callback(null, resMap);
+        callback(errMap, resMap);
       });
     },
 
     spawn: (configuration, callback) => {
       callback = callback || cb;
       if (configuration === undefined || configuration === null ){
-        callback(new Error('Configuration is required'), null);
+        callback({err: new Error('Configuration is required')}, {});
         return;
       }
       if (configuration.ip === undefined || configuration.port === undefined) {
-        callback(new Error('Invalid configuration provided'), null);
+        callback({err: new Error('Invalid configuration provided')}, {});
         return;
       }
       distribution.local.status.spawn(configuration, (err, val) => {
         if (err) {
-          callback(err, null);
+          callback({err: err}, {});
           return;
         }
         const remoteConfig = {
@@ -56,12 +53,15 @@ const status = function(config) {
           method: 'add',
         }
         const message = [context.gid, configuration];
-        distribution[context.gid].comm.send(message, remoteConfig, (errMap, resMap) => {
-          if (Object.keys(errMap).length > 0) {
-            callback(errMap, null);
+        // TODO: Call both and nest the functions so the local is aware as well as the remote
+        distribution.local.groups.add(context.gid, configuration, (err, val) => {
+          if (err) {
+            callback(err, null);
             return;
           }
-          callback(null, resMap);
+           distribution[context.gid].comm.send(message, remoteConfig, (errMap, resMap) => {
+            callback(null, configuration);
+          });
         });
       })
     },
@@ -73,17 +73,13 @@ const status = function(config) {
         method: 'stop',
       }
       distribution[context.gid].comm.send([], remoteConfig, (errMap, resMap) => {
-        if (Object.keys(errMap).length > 0) {
-          callback(errMap, null);
-          return;
-        }
-        distribution.local.status.stop((err, val) => {
-          if (err) { 
-            callback(err, null);
-            return;
-          }
-          callback(null, val);
-        });
+        // distribution.local.status.stop((err, val) => {
+        //   if (err) { 
+        //     errMap['err'] = err;
+        //   }
+        //   callback(errMap, resMap);
+        // });
+        callback(errMap, resMap);
       });
     },
   };

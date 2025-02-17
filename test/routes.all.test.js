@@ -180,7 +180,7 @@ beforeAll((done) => {
 });
 
 afterAll((done) => {
-  distribution.mygroup.status.stop((e, v) => {
+  // distribution.mygroup.status.stop((e, v) => {
     const remote = {service: 'status', method: 'stop'};
     remote.node = n1;
     distribution.local.comm.send([], remote, (e, v) => {
@@ -199,7 +199,7 @@ afterAll((done) => {
               });
             });
           });
-        });
+        // });
       });
     });
   });

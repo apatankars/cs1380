@@ -6,6 +6,8 @@ test('(2 pts) all.status.get(nid)', (done) => {
 
   distribution.mygroup.status.get('nid', (e, v) => {
     try {
+      console.log('e', e);
+      console.log('v', v);
       expect(e).toEqual({});
       expect(Object.values(v).length).toBe(nids.length);
       expect(Object.values(v)).toEqual(expect.arrayContaining(nids));
