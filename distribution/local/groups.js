@@ -1,3 +1,4 @@
+const routes = require('../local/routes');
 const id = distribution.util.id;
 const groups = {};
 
@@ -73,7 +74,6 @@ groups.put = function(config, group, callback) {
             const serviceTemplate = allServices[service];
             serviceObject[service] = serviceTemplate({gid: config});
         }
-
         global.distribution[config] = serviceObject;
     }
 

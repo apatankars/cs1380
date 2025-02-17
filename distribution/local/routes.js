@@ -60,42 +60,35 @@ function get(configuration, callback) {
  * @param {Callback} callback
  * @return {void}
  */
-function put(service, configuration, callback) {
-  callback = callback || cb;
+function put(service, configuration, callback = cb) {
   let gid = "local";
-  if (service === undefined || service === null) {
-    if (configuration && configuration.service) {
-      if (configuration.gid) {
-        gid = configuration.gid;
-      }
+
+  if (!service) {
+    if (configuration?.service) {
+      gid = configuration.gid || gid;
       service = configuration.service;
+      configuration = "";
     } else {
-      return callback(new Error("Service cannot be null or undefined"), null);
+      return callback(new Error("Service cannot be null or undefined"));
     }
   } else if (typeof service !== "object") {
-    callback(new Error("Service must be an object"), null);
-    return;
+    return callback(new Error("Service must be an object"));
   }
-  if (configuration === undefined || configuration === null) {
-    callback(new Error("Configuration cannot be null or undefined"), null);
-    return;
-  } else if (typeof configuration === "object") {
-    if (configuration.gid) {
-      gid = configuration.gid;
-    }
-    if (configuration.service) {
-      configuration = configuration.service;
-    }
-  } else if (typeof configuration === "string") {
-    configuration = configuration;
-  } else {
-    callback(new Error("Configuration must be provided"), null);
-    return;
+
+  if (!configuration) {
+    return callback(new Error("Configuration cannot be null or undefined"));
   }
-  if (!global.routesTable[gid]) {
-    global.routesTable[gid] = {};
+
+  if (typeof configuration === "object") {
+    gid = configuration.gid || gid;
+    configuration = configuration.service || "";
+  } else if (typeof configuration !== "string") {
+    return callback(new Error("Configuration must be a string or an object with a service key"));
   }
+
+  global.routesTable[gid] = global.routesTable[gid] || {};
   global.routesTable[gid][configuration] = service;
+
   callback(null, `Successfully added service ${configuration} to the ${gid} group`);
 }
 
