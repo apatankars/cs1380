@@ -26,6 +26,8 @@ function comm(config) {
     if (message === undefined || message === null) {
       // If no message is provided, we assume the default message is a node id
       message = ['nid'];
+    } else if (!Array.isArray(message)) {
+      message = [message]
     }
     if (configuration === undefined || configuration === null || !configuration.service || !configuration.method
     ) {

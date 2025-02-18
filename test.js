@@ -19,7 +19,7 @@ const group3Group = {};
 let localServer = null;
 
 const n1 = {ip: '127.0.0.1', port: 8008};
-const n2 = {ip: '127.0.0.1', port: 8001};
+const n2 = {ip: '127.0.0.1', port: 9090};
 const n3 = {ip: '127.0.0.1', port: 8002};
 const n4 = {ip: '127.0.0.1', port: 8003};
 const n5 = {ip: '127.0.0.1', port: 8004};
@@ -62,19 +62,19 @@ const startNodes = () => {
               distribution.local.status.spawn(n6, (e, v) => {
                 groupInstantiation(e, v);
 
-                // console.log("Distribution Object: ", distribution);
-                // console.log("Distribution Local Object: ", distribution.local);
-                // console.log("Distribution Local Groups Object: ", distribution['mygroup']);
+                console.log("Distribution Object: ", distribution);
+                console.log("Distribution Local Object: ", distribution.local);
+                console.log("Distribution Local Groups Object: ", distribution['mygroup']);
 
                 distribution.mygroup.status.get('nid', (e, v) => {
-                  // console.log("Group NIDs: ", v);
-                  // console.log("Group error: ", e);
+                  console.log("Group NIDs: ", v);
+                  console.log("Group error: ", e);
                 });
 
-                // distribution.group4.status.get(['nid'], (e, v) => {
-                //   console.log("Group 4 NIDs: ", v);
-                //   console.log("Group 4 error: ", e);
-                // });
+                distribution.group4.status.get(['nid'], (e, v) => {
+                  console.log("Group 4 NIDs: ", v);
+                  console.log("Group 4 error: ", e);
+                });
 
                 cleanUp();
               });
