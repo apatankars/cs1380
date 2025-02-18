@@ -18,7 +18,7 @@ const group3Group = {};
 */
 let localServer = null;
 
-const n1 = {ip: '127.0.0.1', port: 8008};
+const n1 = {ip: '127.0.0.1', port: 9006};
 const n2 = {ip: '127.0.0.1', port: 9090};
 const n3 = {ip: '127.0.0.1', port: 8002};
 const n4 = {ip: '127.0.0.1', port: 8003};

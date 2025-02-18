@@ -80,17 +80,8 @@ function send(message, remote, callback) {
             }
             let [err, val] = parsed;
 
-            // console.log("-----------------------------------");
-
-            // console.log("Service: ", service, " and method: ", method);
-
-            // console.log("Response from remote node: ", err, val);
-
-            // console.log("-----------------------------------");
-
             // If the remote serialized an error, it might be a string or an object
             if (err && (err instanceof Error || (typeof err === 'string' && err.trim() !== '') || (typeof err === 'object' && Object.keys(err).length > 0))) {
-                // If the error is an object, we need to convert it to a string
                 if (typeof err === 'object' && !Array.isArray(err)) {
                     err = JSON.stringify(err);
                 }

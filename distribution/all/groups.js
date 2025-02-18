@@ -88,9 +88,15 @@ const groups = function(config) {
         method: 'add',
       }
       const message = [name, node];
-      distribution[context.gid].comm.send(message, remoteConfig, (errMap, resMap) => {
-        callback(errMap, resMap);
+      distribution.local.groups.add(name, node, (err, val) => {
+        if (err) {
+          return callback({err: err}, {});
+        }
+        distribution[context.gid].comm.send(message, remoteConfig, (errMap, resMap) => {
+          callback(errMap, resMap);
+        });
       });
+      
     },
 
     rem: (name, node, callback) => {
