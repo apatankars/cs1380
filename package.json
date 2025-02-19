@@ -26,8 +26,8 @@
     "yargs": "^17.7.2"
   },
   "report": {
-    "hours": 20,
-    "loc": 300,
+    "hours": 45,
+    "loc": 500,
     "dev": {
       "cpu-no": 11,
       "mem-gb": 7,

@@ -26,6 +26,7 @@ const groups = function(config) {
       const remoteConfig = {
         service: 'groups',
         method: 'put',
+        gid: 'local'
       }
       const message = [config, group];
       global.distribution[context.gid].comm.send(message, remoteConfig, (errMap, resMap) => {
@@ -45,6 +46,7 @@ const groups = function(config) {
       const remoteConfig = {
         service: 'groups',
         method: 'del',
+        gid: 'local'
       }
       const message = [name];
       distribution[context.gid].comm.send(message, remoteConfig, (errMap, resMap) => {
@@ -64,6 +66,7 @@ const groups = function(config) {
       const remoteConfig = {
         service: 'groups',
         method: 'get',
+        gid: 'local'
       }
       const message = [name];
       distribution[context.gid].comm.send(message, remoteConfig, (errMap, resMap) => {
@@ -86,6 +89,7 @@ const groups = function(config) {
       const remoteConfig = {
         service: 'groups',
         method: 'add',
+        gid: 'local'
       }
       const message = [name, node];
       distribution.local.groups.add(name, node, (err, val) => {
@@ -119,14 +123,21 @@ const groups = function(config) {
       } else {
           return callback({key: new Error('Invalid node object')}, {});
       }
-      const remoteConfig = {
+      distribution.local.groups.rem(name, key, (err, val) => {
+        if (err) {
+          return callback({err: err}, {});
+        }
+        const remoteConfig = {
         service: 'groups',
         method: 'rem',
-      }
-      const message = [name, key];
-      distribution[context.gid].comm.send(message, remoteConfig, (errMap, resMap) => {
-        callback(errMap, resMap);
+        gid: 'local'
+        }
+        const message = [name, key];
+        distribution[context.gid].comm.send(message, remoteConfig, (errMap, resMap) => {
+          callback(errMap, resMap);
+        });
       });
+      
     },
   };
 };

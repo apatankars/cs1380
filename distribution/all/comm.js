@@ -54,6 +54,7 @@ function comm(config) {
           service: service,
           method: method,
           node: node,
+          gid: 'local'
         }
         local.comm.send(message, config, (error, response) => {
           if (error) {

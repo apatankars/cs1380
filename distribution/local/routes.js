@@ -39,8 +39,7 @@ function get(configuration, callback) {
   if (
     !global.routesTable || 
     !global.routesTable[gid] || 
-    global.routesTable[gid][service] === undefined || 
-    global.routesTable[gid][service] === null
+    !global.routesTable[gid][service]
   ) {
     const rpc = global.toLocal[service];
     if (rpc) {
@@ -103,14 +102,13 @@ function rem(configuration, callback) {
     if (configuration.service) {
       configuration = configuration.service;
     }
-  } else if (typeof configuration === "string") {
-    configuration = configuration;
+  } else if (typeof configuration !== "string") {
+    callback(new Error("Configuration must be a string or an object with a service key"), null);
   }
   if (
     !global.routesTable || 
     !global.routesTable[gid] || 
-    global.routesTable[gid][configuration] === undefined || 
-    global.routesTable[gid][configuration] === null
+    !global.routesTable[gid][configuration]
   ) {
     callback(new Error(`Service ${configuration} for the ${gid} group does not exist`), null);
     return;

@@ -23,7 +23,7 @@ const status = function(config) {
       }
       distribution[context.gid].comm.send(configuration, remoteConfig, (errMap, resMap) => {
         if (configuration === 'heapTotal' || configuration === 'heapUsed') {
-          const total = 0;
+          let total = 0;
           for (const key in resMap) {
             total += resMap[key];
           }
@@ -73,12 +73,6 @@ const status = function(config) {
         method: 'stop',
       }
       distribution[context.gid].comm.send([], remoteConfig, (errMap, resMap) => {
-        // distribution.local.status.stop((err, val) => {
-        //   if (err) { 
-        //     errMap['err'] = err;
-        //   }
-        //   callback(errMap, resMap);
-        // });
         callback(errMap, resMap);
       });
     },

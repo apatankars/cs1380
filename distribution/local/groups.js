@@ -174,7 +174,7 @@ groups.rem = function(name, node, callback) {
         delete global.groupsTable[name][key];
         return callback(null, global.groupsTable[name]);
     } else {
-        return callback(new Error('Group not found'));
+        return callback(null, {});
     }
 };
 

@@ -1,3 +1,4 @@
+const { util } = require('@brown-ds/distribution');
 const distribution = require('../app/config.js');
 const id = distribution.util.id;
 
@@ -18,12 +19,16 @@ const group3Group = {};
 */
 let localServer = null;
 
-const n1 = {ip: '127.0.0.1', port: 9006};
-const n2 = {ip: '127.0.0.1', port: 9090};
-const n3 = {ip: '127.0.0.1', port: 8002};
-const n4 = {ip: '127.0.0.1', port: 8003};
-const n5 = {ip: '127.0.0.1', port: 8004};
-const n6 = {ip: '127.0.0.1', port: 8005};
+const n1 = {ip: '127.0.0.1', port: 9000};
+const n2 = {ip: '127.0.0.1', port: 9001};
+const n3 = {ip: '127.0.0.1', port: 9002};
+const n4 = {ip: '127.0.0.1', port: 9003};
+const n5 = {ip: '127.0.0.1', port: 9004};
+const n6 = {ip: '127.0.0.1', port: 9005};
+const n7 = {ip: '127.0.0.1', port: 9006};
+const n8 = {ip: '127.0.0.1', port: 9007};
+const n9 = {ip: '127.0.0.1', port: 9008};
+const n10 = {ip: '127.0.0.1', port: 9009};
 
 
 
@@ -62,21 +67,7 @@ const startNodes = () => {
               distribution.local.status.spawn(n6, (e, v) => {
                 groupInstantiation(e, v);
 
-                console.log("Distribution Object: ", distribution);
-                console.log("Distribution Local Object: ", distribution.local);
-                console.log("Distribution Local Groups Object: ", distribution['mygroup']);
-
-                distribution.mygroup.status.get('nid', (e, v) => {
-                  console.log("Group NIDs: ", v);
-                  console.log("Group error: ", e);
-                });
-
-                distribution.group4.status.get(['nid'], (e, v) => {
-                  console.log("Group 4 NIDs: ", v);
-                  console.log("Group 4 error: ", e);
-                });
-
-                cleanUp();
+                  cleanUp();
               });
             });
           });
@@ -87,7 +78,7 @@ const startNodes = () => {
   };
 
 const cleanUp = () => {
-  distribution.mygroup.status.stop((e, v) => {
+  // distribution.mygroup.status.stop((e, v) => {
     const remote = {service: 'status', method: 'stop'};
     remote.node = n1;
     distribution.local.comm.send([], remote, (e, v) => {
@@ -101,9 +92,26 @@ const cleanUp = () => {
             distribution.local.comm.send([], remote, (e, v) => {
               remote.node = n6;
               distribution.local.comm.send([], remote, (e, v) => {
-                localServer.close();
+                remote.node = n7;
+                distribution.local.comm.send([], remote, (e, v) => {
+                  remote.node = n8;
+                  distribution.local.comm.send([], remote, (e, v) => {
+                    remote.node = n9;
+                    distribution.local.comm.send([], remote, (e, v) => {
+                      remote.node = n10;
+                      distribution.local.comm.send([], remote, (e, v) => {
+                        // Now stop the local server
+                        // localServer.close();
+                        // console.log('Local server closed');
+                        // done();
+                        localServer.close();
+                      });
+                    });
+                  });
+                });
+                
               });
-            });
+            // });
           });
         });
       });
@@ -112,7 +120,48 @@ const cleanUp = () => {
 }
 
 // Test the groups
-startNodes();
+// startNodes();
 // cleanUp();
+const NODES = [
+  {
+    ip: "127.0.0.1",
+    port: 9007,
+    onStart: (s) => console.log("Node started at 9007"),
+  },
+  {
+    ip: "127.0.0.1",
+    port: 9090,
+    onStart: (s) => console.log("Node started at 9090"),
+  },
+  {
+    ip: "127.0.0.1",
+    port: 8002,
+    onStart: (s) => console.log("Node started at 8002"),
+  },
+  {
+    ip: "127.0.0.1",
+    port: 8003,
+    onStart: (s) => console.log("Node started at 8003"),
+  },
+  {
+    ip: "127.0.0.1",
+    port: 8004,
+    onStart: (s) => console.log("Node started at 8004"),
+  },
+  {
+    ip: "127.0.0.1",
+    port: 8005,
+    onStart: (s) => console.log("Node started at 8005"),
+  },
+];
+
+// for(const node of NODES) {
+//   console.log(util.serialize(node));
+// }
+
+// console.log(util.serialize({ip: "127.0.0.1", port: 8080, onStart: (s) => console.log("Node 1 Started")}))
+
+
+
 
 
