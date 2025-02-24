@@ -2,7 +2,7 @@ const distribution = require('../config.js');
 const id = distribution.util.id;
 
 
-test('(2.5 pts) all.store.get(no key)', (done) => {
+test('(3 pts) all.store.get(no key)', (done) => {
   const users = [
     {first: 'Emma', last: 'Watson'},
     {first: 'John', last: 'Krasinski'},
@@ -31,8 +31,36 @@ test('(2.5 pts) all.store.get(no key)', (done) => {
   });
 });
 
+test('(1 pts) all.store.get(no key)', (done) => {
+  const users = [
+    {first: 'Saul', last: 'Goodman'},
+    {first: 'Walter', last: 'White'},
+    {first: 'Jesse', last: 'Pinkman'},
+  ];
+  const keys = [
+    'sgoodmansgnk',
+    'jkrasinskisgnk',
+    'jbowensgnk',
+  ];
 
-test('(15 pts) all.store.reconf', (done) => {
+  distribution.mygroup.store.put(users[0], keys[0], (e, v) => {
+    distribution.mygroup.store.put(users[1], keys[1], (e, v) => {
+      distribution.mygroup.store.put(users[2], keys[2], (e, v) => {
+        distribution.mygroup.store.get(null, (e, v) => {
+          try {
+            expect(e).toEqual({});
+            expect(Object.values(v)).toEqual(expect.arrayContaining(keys));
+            done();
+          } catch (error) {
+            done(error);
+          }
+        });
+      });
+    });
+  });
+});
+
+test('(12 pts) all.store.reconf', (done) => {
   /*
        NOTE: If this test fails locally,
        make sure you delete the contents of the store/ directory (not the directory itself!),
@@ -222,10 +250,9 @@ beforeAll((done) => {
 
         // Create the groups
         distribution.local.groups.put(mygroupConfig, mygroupGroup, (e, v) => {
-          distribution.mygroup.groups
-              .put(mygroupConfig, mygroupGroup, (e, v) => {
-                done();
-              });
+          distribution.mygroup.groups.put(mygroupConfig, mygroupGroup, (e, v) => {
+            done();
+          });
         });
       };
 

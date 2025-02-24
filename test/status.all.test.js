@@ -1,6 +1,8 @@
 const distribution = require('../config.js');
 const id = distribution.util.id;
 
+jest.spyOn(process, 'exit').mockImplementation((n) => { });
+
 test('(2 pts) all.status.get(nid)', (done) => {
   const nids = Object.values(mygroupGroup).map((node) => id.getNID(node));
 

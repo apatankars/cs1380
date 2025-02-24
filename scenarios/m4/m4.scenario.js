@@ -96,7 +96,7 @@ test('(5 pts) (scenario) use mem.reconf', (done) => {
 
   // Create a group with any number of nodes
   const mygroupGroup = {};
-  mygroupGroup[id.getSID(n1)] = n1;
+  mygroupGroup[id.getSID(distribution.node.config)] = distribution.node.config; // Adding the current node to the group
   // Add more nodes to the group...
 
   // Create a set of items and corresponding keys...

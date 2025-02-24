@@ -1,6 +1,8 @@
 const distribution = require('../config.js');
 const id = distribution.util.id;
 
+jest.spyOn(process, 'exit').mockImplementation((n) => { });
+
 test('(10 pts) all.status.spawn/stop()', (done) => {
   // Spawn a node
   const nodeToSpawn = {ip: '127.0.0.1', port: 8008};
@@ -134,7 +136,7 @@ beforeAll((done) => {
                     done();
                   });
                 });
-              });
+          });
     };
 
     // Start the nodes

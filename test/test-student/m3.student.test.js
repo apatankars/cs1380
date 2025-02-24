@@ -37,7 +37,7 @@ const normalizeGroup = (group) => {
   return result;
 };
 
-test('(1 pts) group student test', (done) => {
+test('(1 pts) student test', (done) => {
   // We'll define a unique group name/config for this test
   const mygroupConfig1 = { gid: 'mygroup1' };
   const mygroupGroup1 = {};
@@ -95,7 +95,7 @@ test('(1 pts) group student test', (done) => {
   });
 });
 
-test('(1 pts) embedded group test', (done) => {
+test('(1 pts) student test', (done) => {
   // Use a unique group name for this test
   const mygroupConfig2 = { gid: 'mygroup2' };
   const mygroupGroup2 = {};
@@ -142,7 +142,7 @@ test('(1 pts) embedded group test', (done) => {
   });
 });
 
-test('(1 pts) comm test', (done) => {
+test('(1 pts) student test', (done) => {
   // We'll define 'mygroup3' for this test
   const mygroupConfig3 = { gid: 'mygroup3' };
   const mygroupGroup3 = {};
@@ -209,7 +209,7 @@ test('(1 pts) comm test', (done) => {
   });
 });
 
-test('(1 pts) route student', (done) => {
+test('(1 pts) student test', (done) => {
   // We'll define 'mygroup4' for this test
   const mygroupConfig4 = { gid: 'mygroup4' };
   const mygroupGroup4 = {};
@@ -264,7 +264,7 @@ test('(1 pts) route student', (done) => {
   });
 });
 
-test('(1 pts) gid comm test', (done) => {
+test('(1 pts) student test', (done) => {
   // We'll define 'mygroup5' for this test
   const mygroupConfig5 = { gid: 'mygroup5' };
   const mygroupGroup5 = {};

@@ -2,7 +2,7 @@ const distribution = require('../config.js');
 const id = distribution.util.id;
 
 
-test('(2.5 pts) all.mem.get(no key)', (done) => {
+test('(3 pts) all.mem.get(no key)', (done) => {
   const users = [
     {first: 'Emma', last: 'Watson'},
     {first: 'John', last: 'Krasinski'},
@@ -50,7 +50,7 @@ test('(2.5 pts) all.mem.get(no key)', (done) => {
   });
 });
 
-test('(15 pts) all.mem.reconf', (done) => {
+test('(10 pts) all.mem.reconf', (done) => {
   // First, we check where the keys should be placed
   // before we change the group's nodes.
   // mygroup uses the specified hash function for item placement,

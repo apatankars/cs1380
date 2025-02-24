@@ -1,6 +1,8 @@
 const distribution = require('../config.js');
 const id = distribution.util.id;
 
+jest.spyOn(process, 'exit').mockImplementation((n) => { });
+
 // This group is used for testing most of the functionality
 const mygroupGroup = {};
 
