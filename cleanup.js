@@ -1,4 +1,4 @@
-const distribution = require('../app/config.js');
+const distribution = require('distribution');
 
 const n1 = { ip: '127.0.0.1', port: 9001 };
 const n2 = { ip: '127.0.0.1', port: 9002 };
