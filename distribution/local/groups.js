@@ -46,14 +46,19 @@ groups.get = function(name, callback) {
  */
 groups.put = function(config, group, callback) {
     callback = callback || cb;
+    let gid = config;
+    let hash;
     if (typeof config === 'object') {
         if (config.gid) {
-            config = config.gid;
+            gid = config.gid;
+        if (config.hash) {
+            hash = config.hash;
+        }
         } else {
-            return callback(new Error('Invalid group name'));
+            return callback(new Error('Invalid group ID'));
         }
     } else if (typeof config !== 'string') {
-        return callback(new Error('Invalid group name'));
+        return callback(new Error('Invalid group ID'));
     }
     if (typeof group !== 'object') {
         return callback(new Error('Invalid group object'));
@@ -61,22 +66,26 @@ groups.put = function(config, group, callback) {
     for (const sid in group) {
         global.groupsTable['all'][sid] = group[sid];
     }
-    global.groupsTable[config] = group;
+    global.groupsTable[gid] = group;
 
     // Now we can add it to the distribution object for the node
-    if (!global.distribution[config]) {
+    if (!global.distribution[gid]) {
 
         const allServices = require('../all/all.js');
 
         let serviceObject = {};
         for (const service in allServices) {
             const serviceTemplate = allServices[service];
-            serviceObject[service] = serviceTemplate({gid: config});
+            if (hash && (service === 'mem' || service === 'store')) {
+                serviceObject[service] = serviceTemplate({gid: gid, hash: hash});
+            } else {
+                serviceObject[service] = serviceTemplate({gid: gid});
+            }
         }
-        global.distribution[config] = serviceObject;
-        global.routesTable[config] = global.routesTable[config] || {};
-        for (const service in global.distribution[config]) {
-            global.routesTable[config][service] = global.distribution[config][service];
+        global.distribution[gid] = serviceObject;
+        global.routesTable[gid] = global.routesTable[gid] || {};
+        for (const service in global.distribution[gid]) {
+            global.routesTable[gid][service] = global.distribution[gid][service];
         }
     }
 
