@@ -48,7 +48,9 @@ distribution.node.start((server) => {
             console.log('Spawned node: ', spawnNode);
             
             const groupConfig = {gid: 'mygroup', hash: id.consistentHash};
-
+            setTimeout(() => {
+                console.log("Waited 10 seconds");
+            }, 10000);
             if (index === '1') {
                 const groupObj = {};
                 groupObj[id.getSID(n1)] = n1;
