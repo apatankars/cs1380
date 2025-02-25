@@ -1,3 +1,5 @@
+const distribution = require('../config.js');
+
 const n1 = { ip: '127.0.0.1', port: 9001 };
 const n2 = { ip: '127.0.0.1', port: 9002 };
 const n3 = { ip: '127.0.0.1', port: 9003 };
