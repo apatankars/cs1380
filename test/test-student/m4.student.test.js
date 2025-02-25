@@ -13,10 +13,6 @@ const id = util.id;
 jest.spyOn(process, 'exit').mockImplementation((n) => { });
 
 test('(1 pts) student test', (done) => {
-  // This is going to be testing out the local and distributed mem functionality
-  
-  // First, we will try out the local mem functionality with a complex object
-
   const user = {
     first: 'Josiah',
     last: 'Carberry',
@@ -84,7 +80,6 @@ test('(1 pts) student test', (done) => {
 
 
 test('(1 pts) student test', (done) => {
-  // Now we are going to do a similar thing, but with the store service
   const user = {
     first: 'Josiah',
     last: 'Carberry',
@@ -154,17 +149,105 @@ test('(1 pts) student test', (done) => {
 
 
 test('(1 pts) student test', (done) => {
+  const user = { first: 'billy', last: 'bob' };
+  const key = 'billyBey';
+  const kid = id.getID(key);
+  const nodes = Object.values(group4Group);
+  const nids = nodes.map(n => id.getNID(n));
 
+  const chosenNID = id.consistentHash(kid, nids);
+  const chosenNode = nodes.find((node) => id.getNID(node) === chosenNID);
+
+  distribution.group4.mem.put(user, key, (err, val) => {
+    if (err) return done(err);
+
+    const remote = {
+      node: chosenNode,
+      service: 'mem',
+      method: 'get',
+    };
+    const message = [{ gid: 'group4', key: key }];
+
+    distribution.local.comm.send(message, remote, (err, val) => {
+      try {
+        expect(err).toBeFalsy();
+        expect(val).toEqual(user);
+        done();
+      } catch (testErr) {
+        done(testErr);
+      }
+    });
+  });
 });
 
 test('(1 pts) student test', (done) => {
-  // Fill out this test case...
-    done(new Error('Not implemented'));
+  const googleEmployee = {
+    office: 'Mountain View',
+    social_points: -100,
+    aura: 'dark',
+    specs: { brand: 'sweat', processor: 'leetcode' }
+  };
+  const key = 'brownStudent';
+  const kid = id.getID(key);
+  const nodes = Object.values(group3Group);
+  const nids = nodes.map((node) => id.getNID(node));
+
+  const chosenNID = id.rendezvousHash(kid, nids);
+  const chosenNode = nodes.find((node) => id.getNID(node) === chosenNID);
+
+  // 1) Put into group3 store
+  distribution.group3.store.put(googleEmployee, key, (err, val) => {
+    if (err) return done(err);
+
+    const remote = {
+      node: chosenNode,
+      service: 'store',
+      method: 'get',
+    };
+    const message = [{ gid: 'group3', key: key }];
+
+    distribution.local.comm.send(message, remote, (err, val) => {
+      try {
+        expect(err).toBeFalsy();
+        expect(val).toEqual(googleEmployee);
+        done();
+      } catch (testErr) {
+        done(testErr);
+      }
+    });
+  });
 });
 
 test('(1 pts) student test', (done) => {
-  // Fill out this test case...
-    done(new Error('Not implemented'));
+  const user = { first: 'matt', last: 'dasilva', favorites: ['oily', 'olives'] };
+
+  distribution.group2.store.put(user, null, (err, val) => {
+    if (err) return done(err);
+
+    try {
+      expect(val).toEqual(user);
+    } catch (testErr) {
+      return done(testErr);
+    }
+    const hashedKey = id.getID(user);
+    distribution.group2.store.get(hashedKey, (err, val) => {
+      if (err) return done(err);
+      try {
+        expect(val).toEqual(user);
+      } catch (testErr) {
+        return done(testErr);
+      }
+      distribution.group3.store.get(hashedKey, (err, val) => {
+        try {
+          expect(err).toBeInstanceOf(Error);
+          expect(val).toBeFalsy();
+          done();
+        } catch (testErr) {
+          done(testErr);
+        }
+      });
+    });
+  });
 });
 
 
