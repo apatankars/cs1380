@@ -2,6 +2,7 @@
 
 const distribution = require('../config.js');
 const id = distribution.util.id;
+const http = require('http');
 
 // Slice off the first two elements (node and script path)
 const args = process.argv.slice(2);
