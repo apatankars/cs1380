@@ -4,9 +4,11 @@ const distribution = require('./distribution');
 const n1 = {ip: '172.31.8.158', port: 9001};
 const n2 = {ip: '172.31.5.55', port: 9002};
 const n3 = {ip: '172.31.3.4', port: 9003};
+const n4 = {ip: '127.0.0.1', port: 1234};
+const n5 = {ip: '127.0.0.1', port: 9001};
 
 
-let nodeList = [n1, n2, n3];
+let nodeList = [n1, n2, n3, n4, n5];
 
 // Slice off the first two elements (node and script path)
 const args = process.argv.slice(2);
@@ -20,6 +22,7 @@ if (args.length === 0) {
 const index = args[0];
 
 let spawnNode = nodeList[index - 1];
+console.log(spawnNode)
 
 const remote = {service: 'status', method: 'stop'};
 remote.node = spawnNode;

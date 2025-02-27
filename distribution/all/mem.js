@@ -89,9 +89,6 @@ function mem(config) {
       // 3) Get the correct node
       getChosenNode(configuration , (err, chosenNode) => {
         if (err) return callback(new Error('Could not find a node'), null);
-
-        console.log('Chosen node:', chosenNode);
-
         // 6) Send the key to the chosen node
         const config = {
           service: 'mem',

@@ -1,39 +1,37 @@
-# M1 : Serialization / Deserialization
+# M4: Distributed Storage
 
 ## Summary
+In milestone 4, I implemented a distributed key-value storage system that uses consistent hashing and rendezvous hashing to efficiently distribute data across multiple nodes in our systems. The implementation includes both the local and distributed versions of in-memory (mem) and disc (store) storage services.
 
-My implementation for M3 builds on the previous milestones to add support for node groups and distributed services, totaling approximately 300+ new lines of code across the core local and distributed components. The milestone focuses on creating abstractions for viewing and interacting with sets of nodes as unified objects. In this milestone, I implemented 4 new software components, and modified 3 old ones:
-<li> `groups` which allow for nodes to maintain membership and record of different node groups across the system. The group is both a local service, where each node has its own local view of groups and their respective memberships, and a global service that allows node groups to manage their groups. 
-<li> `routes` which is both a distributed and local service which allows nodes to maintain mapping to their local services, and their group services which can be used to access the distributed services
-<li> `status` is now also a distributed and local service which allows nodes to report their own status, but now groups can also obtain their status, as well as spawn nodes in the group, and kill the group.
-<li> `comm` is now also a distributed service which takes distributed calls and makes a local `comm` call to each node within the group
+For the local services, I wrote implementations that store and retrieve data either in memory using a JavaScript object or on disk using the fs module to write custom files. The distributed services build upon these and use hashing algorithms to determine which node in a group should handle a specific object based on its key.
 
-### Challenges
-Some of the key challenges I faced in this milestone managing group membership across different nodes. This is because each node is supposed to maintain a local view of groups, and these are able to differ. This resulted in a lot of issues because it was understand how the distributed systems are meant to interact with the nodes within their respective group. However, the nodes within a group aren't necessarily aware of the group they are apart of. This logic was hard to wrap my head around at first, and I still think portions of my code are a little messy. As a fix to this, I added checks to make sure that the distributed services make the proper assumptions about its nodes, and that if they are ambiguous, they are properly handled.
+### Key Challenges:
+- Implementing proper key management to distinguish between identical keys across different node groups. In order to solve this, the local memory services maps first to the `gid` and then to the key. This same schema is used in the `store` service. These always default to the `local` group.
+- Initally, I was facing some challenges with actually trying to write to write the data to the disc. I was initally confused as to how to actually implement the same schema from `mem` in `store` since now I had to create directories and they had to be unique to that node. At first, I forgot we even had access to `global.nodeConfig`, but once I figured that out and the API specifications for the `fs` module, I was able to properly implement my desired disc storage schema.
+- Setting up the AWS instances to test performance at scale was insanely hard. This may have been the longest part of the assignment for me. I found it really hard to conceptualize how to actually get the nodes to communicate with each other now. I understood how to do this on my local machine, but now these requests needed to actually happen. The first big issue was figuring out how to spawn the nodes. I had to create new AWS instances that allowed for HTTP connections and a custom TCP protocol. Using this, I thought I would be able to use their public IPs so I could properly set the node configurations. Initally, I had a singular `JS` file that I was deploying and calling on all nodes. This file would do different things depending on the `nodeIdx` I provided it (i.e properly set up the distributed group). However, my big issue was that I had no way of figuring out how to actually get the nodes to communicate since everything I was trying wasn't working (i.e. each node was trying to spawn itself using its public IP). Ultimately, it was after souring on Ed I realized how to set up the nodes to properly communicate where they are spawned from the `ip: 0.0.0.0.0/0`, but they can be contacted through their public IPs. Using this, I have a local script that connects to the nodes, creates the group, and properly measures the performance of the services.
 
-Another major challenge was handling the code hanging. Often times, I found my methods hanging in an infinite loop which make it really hard to debug and find the issue. When the code got stuck in a loop, it was hard to find the source of the error and would often take up a few hours alone to really break down the code. 
+## Correctness & Performance Characterization
 
-Finally, the last major thing was implementing the dynamic service instantiation for new groups. It was hard to understand how and where to properly instantiate the new services so that they are accessible by the `distribution` object and the `routes` table. I fixed this within the `groups.put` method where I instantiate the distribution object.
+### *Correctness*: 
+I developed 5 custom test cases to validate the system's functionality. These cases are focused on the edge cases of my implementation:
+1. Local memory service test - verifying that the local memory storage works and can properly distinguish between identical keys and objects in different groups
+2. Local store service test - this is very similar to the local memory service test, as it also tests to make sure the service works and distinguishes between groups
+3. Consistent hashing test - this test was aimed at the verifying the consistent hash function works by validing the correct node and route 
+4. Rendezvous hashing test - this is similar as the above one by ensuring proper data distribution across group3
+5. Key generation test - this is just a test to ensure that when no key is provided, the auto-generated key is the sha256 hash of the object.
 
-## Correctness
-I wrote 5 tests in `m3.student.test.js` which span the different services I implemented in this milestone. 
-### Structure
-The test suite consists of multiple test cases verifying different aspects of the system:
-1.	Group Membership: Ensures nodes can be added, removed, and queried correctly within groups.
-2.	Communication: Validates that messages and service requests can be sent across nodes.
-3.	Routing: Checks that routes are properly registered, retrieved, and deleted within the distributed system.
-4.	Node Lifecycle Management: Verifies that nodes can be started and stopped without affecting overall system stability.
-### Setup
-Automated Testing Setup
-<li>Before Each Test: The system initializes a local server and spawns test nodes to simulate a network environment.
-<li>After Each Test: The system cleans up by stopping all running nodes and closing connections.
-<li>Assertions: The tests use Jest to validate expected behaviors and ensure proper error handling when conditions fail.
+All tests complete in 1198 milliseconds and validate the core functionality of both local and distributed storage services.
 
-## Performance
-For performance, I wrote two test files (on in shell and one in Javascript). These were to test out the different methods we are affored to spawn new nodes. I spawn some nodes in each file and measure the time it takes to spawn the node (the `onStart` function). This was actually a bit of struggle to do with the shell script, so I implemented a nifty technique to use a temporary file which is grepped to wait for the output of the `onStart` function since it was hard to serialize the personalized callbacks. For the Javascript file, it was fairly easy, but I kept running into issues where if I tried to spawn nodes in a loop that doesn't wait, they would all default to the final port in the group of nodes (very weird issue). 
-For the JavaScript file, the average latency was **77.51ms** and the average throughput came out to **5.35** nodes per second (I launched 10 nodes which took a total of 1867.97ms).
-For the shell script, I spawned only spawned 5 nodes. The average latency here ended up coming to **100ms** and throughput as **9.83** nodes per second.
+### *Performance*:
+I deployed my custom distributed system on 3 AWS nodes with special TCP protocol and measured both put and get performance for both services. As mentioned above, this was a real struggle, but in order to measure performance, my `performance/distributedMem.js` file is home to everything. First, I wrote a function to generate random strings which given a length, will randomly sample the alphabet and generate a `key`. Then using this, I populate a dictionary with each key and its corresponding value (which is also an object). I then spawn a local node that then creates the group with the three AWS nodes. Finally, I call my measure functions which properly call the corresponding functions and aggregate their results. Here is what I produced:
+
+**`MEM`**   
+    - For put I was able to achieve a throughput of 2544.53 ops/second with an average latency of 249.82ms.
+    - For get I was able to achieve a throughput of 4716.98 ops/second with an average latency of 115.15ms.
+
+**`STORE`**   
+    - For put I was able to achieve a throughput of 2403.85 ops/second with an average latency of 218.96ms.
+    - For get I was able to achieve a throughput of 2816.90 ops/second with an average latency of 234.88ms.
 
 ## Key Feature
-The key advantages we are afforded from gossip protocols are much easier to grasp when we move from our trivial examples with a few nodes to systems where there are thousands of nodes operating simultaneously. In this case without a gossip protocol, if we had a message or update that was required to be shared with all of the nodes in the system, it would require the node to send n-1 messages (n = total number of nodes in system). In systems with large numbers of nodes, this broadcasting would cause large network overhead as a massive number of requests are put into the system. Furthermore, now the broadcasting node has to manage each of these n-1 connections to make sure the message was delivered, and if not, manage the subsequent re-tries. This is a naive implementation is not scalable for the large distributed systems we require today.
-Using a gossip protocol, each node can choose a subset of nodes at random to share information periodically. This allows us to spread the network load across nodes, as each node is now only handling a subsect instead of broadcasting to all nodes. We also reduce the total load on the network at once as the gossip protocol occurs in rounds which means the network won't receive n-1 calls at one (at least from trying to send information). Since each node is only managing a subset, the load on the each node stays relatively constant even as the system scales to include more nodes and it is easier to handle failures and retries. 
+The `reconf` method designed to first identify all the keys to be relocated and then relocate individual objects instead of fetching all the objects immediately and then pushing them to their corresponding locations because that would be pretty silly. As we discovered from our use of hash functions beyond the basic modulus by the size of group, we do not need necessarily need to redistribute the data within all of our nodes. These alternative hash functions, such as consistent hashing, allow for a only a subset of nodes to be affected when a new node is added or removed. Therefore, in `reconf`, the approach to first identify the keys to be relocated and then move them avoids the overhead of processing keys that are already correctly located and do not need to moved which significantly reduces network load for large systems. It also prevents network congestion by processing data in manageable batches of nodes that needs changes, allowing the system to rebalance gradually rather than experiencing a sudden spike in a large reconfiguration. Another consider is likely that by relocating objects one at a time, the system is able to more effectively tolerate errors and failures since the entire system is not being overloaded. This implementation scales much better with increasing numbers of objects and nodes as it allocates computational and network resources only where needed. Furthermore, with these alternative hash functions, there is no need to reconfigure all of the data in the system at once.
