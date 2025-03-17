@@ -14,7 +14,7 @@ const n1 = {ip: '127.0.0.1', port: 7110};
 const n2 = {ip: '127.0.0.1', port: 7111};
 const n3 = {ip: '127.0.0.1', port: 7112};
 
-test('(25 pts) all.mr:ncdc', (done) => {
+test('(20 pts) all.mr:ncdc', (done) => {
   const mapper = (key, value) => {
     const words = value.split(/(\s+)/).filter((e) => e !== ' ');
     const out = {};
@@ -39,22 +39,13 @@ test('(25 pts) all.mr:ncdc', (done) => {
   const expected = [{'1950': 22}, {'1949': 111}];
 
   const doMapReduce = (cb) => {
-    distribution.ncdc.store.get(null, (e, v) => {
+    distribution.ncdc.mr.exec({keys: getDatasetKeys(dataset), map: mapper, reduce: reducer}, (e, v) => {
       try {
-        expect(v.length).toBe(dataset.length);
+        expect(v).toEqual(expect.arrayContaining(expected));
+        done();
       } catch (e) {
         done(e);
       }
-
-
-      distribution.ncdc.mr.exec({keys: v, map: mapper, reduce: reducer}, (e, v) => {
-        try {
-          expect(v).toEqual(expect.arrayContaining(expected));
-          done();
-        } catch (e) {
-          done(e);
-        }
-      });
     });
   };
 
@@ -74,7 +65,7 @@ test('(25 pts) all.mr:ncdc', (done) => {
 });
 
 
-test('(25 pts) all.mr:avgwrdl', (done) => {
+test('(20 pts) all.mr:avgwrdl', (done) => {
   // Calculate the average word length for each document
   const mapper = (key, value) => {
     const words = value.split(/\s+/).filter((e) => e !== '');
@@ -108,21 +99,13 @@ test('(25 pts) all.mr:avgwrdl', (done) => {
   ];
 
   const doMapReduce = (cb) => {
-    distribution.avgwrdl.store.get(null, (e, v) => {
+    distribution.avgwrdl.mr.exec({keys: getDatasetKeys(dataset), map: mapper, reduce: reducer}, (e, v) => {
       try {
-        expect(v.length).toBe(dataset.length);
+        expect(v).toEqual(expect.arrayContaining(expected));
+        done();
       } catch (e) {
         done(e);
       }
-
-      distribution.avgwrdl.mr.exec({keys: v, map: mapper, reduce: reducer}, (e, v) => {
-        try {
-          expect(v).toEqual(expect.arrayContaining(expected));
-          done();
-        } catch (e) {
-          done(e);
-        }
-      });
     });
   };
 
@@ -175,21 +158,13 @@ test('(25 pts) all.mr:cfreq', (done) => {
   ];
 
   const doMapReduce = (cb) => {
-    distribution.cfreq.store.get(null, (e, v) => {
+    distribution.cfreq.mr.exec({keys: getDatasetKeys(dataset), map: mapper, reduce: reducer}, (e, v) => {
       try {
-        expect(v.length).toBe(dataset.length);
+        expect(v).toEqual(expect.arrayContaining(expected));
+        done();
       } catch (e) {
         done(e);
       }
-
-      distribution.cfreq.mr.exec({keys: v, map: mapper, reduce: reducer}, (e, v) => {
-        try {
-          expect(v).toEqual(expect.arrayContaining(expected));
-          done();
-        } catch (e) {
-          done(e);
-        }
-      });
     });
   };
 
@@ -208,8 +183,13 @@ test('(25 pts) all.mr:cfreq', (done) => {
 });
 
 /*
-    Do not modify the code below.
+    Test setup and teardown
 */
+
+// Helper function to extract keys from dataset (in case the get(null) funnctionality has not been implemented)
+function getDatasetKeys(dataset) {
+  return dataset.map((o) => Object.keys(o)[0]);
+}
 
 beforeAll((done) => {
   ncdcGroup[id.getSID(n1)] = n1;
@@ -273,5 +253,3 @@ afterAll((done) => {
     });
   });
 });
-
-
