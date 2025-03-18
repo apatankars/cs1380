@@ -21,17 +21,13 @@ function mem(config) {
         if (err) {
           return null;
         }
-      // 2) Build array of NIDs from the group’s node configs
+
       const nodeConfigs = Object.values(group); // an array of {ip, port} objects
       const nids = nodeConfigs.map((nc) => id.getNID(nc));
 
-      // 3) Get the key id
       const kid = id.getID(configuration);
-
-      // 4) Use our chosen hash function to pick exactly one NID
       const chosenNID = context.hash(kid, nids);
 
-      // 5) find the node config whose NID matches chosenNID
       let chosenNode = nodeConfigs.find((nc) => id.getNID(nc) === chosenNID);
       callback(null, chosenNode);
     });
@@ -47,11 +43,9 @@ function mem(config) {
         return;
       }
 
-      // 3) Get the correct node
       getChosenNode(configuration, (err, chosenNode) => {
         if (err) return callback(new Error('Could not find a node'), null);
 
-        // 6) Send the key to the chosen node
         const config = {
           service: 'mem',
           method: 'get',
@@ -119,11 +113,9 @@ function mem(config) {
         callback(new Error('Configuration is required'), null);
         return;
       }
-      // 3) Get the correct node
       getChosenNode(configuration, (err, chosenNode) => {
         if (err) return callback(new Error('Could not find a node'), null);
 
-        // 6) Send the key to the chosen node
         const config = {
           service: 'mem',
           method: 'del',
