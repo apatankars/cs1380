@@ -96,9 +96,18 @@ test('(2 pts) (scenario) collect errors and successful results', (done) => {
   }
 });
 
-test('(5 pts) (scenario) use rpc', (done) => {
+test.only('(5 pts) (scenario) use rpc', (done) => {
   let n = 0;
+  let mrId = 1234;
+  const mrServiceName = `mr@${mrId}`; // mr@<uuid>
+  let state_dict = {
+      phase: "SETUP",
+      phase_count: 0,
+  };
   const addOne = () => {
+    console.log("Working on job " + mrServiceName);
+    state_dict.phase_count = n;
+    console.log("Job Phase Count :", state_dict.phase_count);
     return ++n;
   };
 

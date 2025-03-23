@@ -98,9 +98,11 @@ test("(10 pts) (scenario) all.mr:dlib", (done) => {
    Implement the map and reduce functions.
    The map function should parse the string value and return an object with the word as the key and the value as 1.
    The reduce function should return the count of each word.
+   
 */
 
   const mapper = (key, value) => {
+    
     const words = value.split(/(\s+)/).filter((e) => e !== " ");
     let out = [];
     for (const word of words) {
@@ -112,9 +114,12 @@ test("(10 pts) (scenario) all.mr:dlib", (done) => {
   };
 
   const reducer = (key, values) => {
+    console.log("This is the input to the reducer: ", key, values);
     const out = {};
     out[key] = values.reduce((runningSum, a) => runningSum + a, 0);
+    console.log("This is the output of the reducer: ", out);
     return out;
+    
   };
 
   const dataset = [
@@ -153,6 +158,7 @@ test("(10 pts) (scenario) all.mr:dlib", (done) => {
     distribution.dlib.store.get(null, (e, v) => {
       try {
         expect(v.length).toBe(dataset.length);
+        console.log(mapResults)
       } catch (e) {
         done(e);
       }
@@ -392,8 +398,9 @@ test("(10 pts) (scenario) all.mr:strmatch", (done) => {
 });
 
 // Create a mapping from terms in documents (addressed by identifiers) to object IDs.
-test("(10 pts) (scenario) all.mr:ridx", (done) => {
+test.only("(10 pts) (scenario) all.mr:ridx", (done) => {
   const mapper = (key, value) => {
+    console.log("This is the input to the mapper: ", key, value);
     const words = value.toLowerCase().split(/\s+/);
     const uniqueWords = new Set(words);
     let out = [];
@@ -402,16 +409,18 @@ test("(10 pts) (scenario) all.mr:ridx", (done) => {
       out_obj[word] = key;
       out.push(out_obj);
     });
+    console.log("This is the output of the mapper: ", out);
     return out;
   };
 
   // Reduce function: calculate TF-IDF for each word
   const reducer = (key, values) => {      
     // consistent order
+    console.log("Reducer Key + Value: ", key, values)
     values.sort();
-    
     const out = {};
     out[key] = values;
+    console.log("This is the output of the reducer: ", out);
     return out;
   };
 

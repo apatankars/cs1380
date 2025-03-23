@@ -129,8 +129,21 @@ function get(configuration, callback) {
       return callback(e, null);
     }
   });
+}
 
+function getGroupKeys(gid, callback) {
+  let nodeConfig = global.nodeConfig;
+  let nodeID = util.id.getNID(nodeConfig);
 
+  const groupDir = path.join('store', nodeID, gid);
+    // If the directory doesn’t exist or is empty, return []
+  if (!fs.existsSync(groupDir)) {
+    return callback(null, []);
+  }
+  const files = fs.readdirSync(groupDir); // e.g. [ 'jcarb.json', 'someKey.json' ]
+  // remove the .json from each for "key" names
+  const keys = files.map((f) => f.replace(/\.json$/, ''));
+  return callback(null, keys);
 }
 
 function del(configuration, callback) {
@@ -180,4 +193,83 @@ function del(configuration, callback) {
   });
 }
 
-module.exports = {put, get, del};
+function append(state, configuration, callback) {
+  let nodeConfig = global.nodeConfig;
+  let nodeID = util.id.getNID(nodeConfig);
+  let key;
+  let gid = 'local';
+  
+  // If no state is given, error out
+  if (!state) {
+    return callback(new Error('No state to append'));
+  }
+  
+  // Parse configuration to get key and gid - same as in put()
+  if (configuration === null || configuration === undefined) {
+    key = util.id.getID(state);
+  } else if (typeof configuration === 'object') {
+    if (configuration.key) {
+      key = configuration.key;
+    }
+    if (configuration.gid) {
+      gid = configuration.gid;
+    }
+    if (!key) {
+      key = util.id.getID(state);
+    }
+  } else if (typeof configuration === 'string') {
+    key = configuration;
+  } else {
+    key = util.id.getID(state);
+  }
+  
+  // Build full directory path: store/<NID>/<gid>
+  const groupDir = path.join('store', nodeID, gid);
+  fs.mkdirSync(groupDir, { recursive: true });
+  
+  const filePath = path.join(groupDir, sanitizeKey(key) + '.json');
+  
+  // Check if the file already exists
+  if (fs.existsSync(filePath)) {
+    // Read existing data
+    fs.readFile(filePath, 'utf8', (err, data) => {
+      if (err) return callback(err, null);
+      
+      let existingData;
+      try {
+        const parsedData = JSON.parse(data);
+        existingData = util.deserialize(parsedData);
+      } catch (e) {
+        return callback(new Error('Error parsing existing data: ' + e.message), null);
+      }
+      
+      // Convert existing data to array if it's not one already
+      let dataArray = Array.isArray(existingData) ? existingData : [existingData];
+      
+      // Append new state to the array
+      dataArray.push(state);
+      
+      // Serialize and save the updated array
+      const serialized = util.serialize(dataArray);
+      const value = JSON.stringify(serialized);
+      
+      fs.writeFile(filePath, value, (err) => {
+        if (err) return callback(err, null);
+        return callback(null, dataArray);
+      });
+    });
+  } else {
+    // If file doesn't exist, create a new one with state wrapped in an array
+    let initialData = [state];
+    
+    const serialized = util.serialize(initialData);
+    const value = JSON.stringify(serialized);
+    
+    fs.writeFile(filePath, value, (err) => {
+      if (err) return callback(err, null);
+      return callback(null, initialData);
+    });
+  }
+}
+
+module.exports = {put, get, getGroupKeys, del, append};

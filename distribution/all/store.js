@@ -145,6 +145,45 @@ function store(config) {
       });
     },
 
+    append: (state, configuration, callback) => {
+      callback = callback || cb;
+      if (state === undefined || state === null ){
+        callback(new Error('State is required'), null);
+        return;
+      }
+
+      if (configuration === null) {
+        configuration = id.getID(state);
+      }
+
+      // 3) Get the correct node
+      getChosenNode(configuration, (err, chosenNode) => {
+        if (err) return callback(new Error('Could not find a node'), null);
+
+        // 6) Send the key to the chosen node
+        const config = {
+          service: 'store',
+          method: 'append',
+          node: chosenNode
+        };
+
+        const messageConfig = {
+          key: configuration,
+          gid: context.gid
+        }
+
+        const message = [state, messageConfig];
+
+        local.comm.send(message, config, (err, val) => {
+          if (err) {
+            callback(err, null);
+            return;
+          }
+          callback(null, val);
+        });
+      });
+    },
+
     reconf: (configuration, callback) => {
     },
   };
