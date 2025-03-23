@@ -21,8 +21,8 @@ const cb = (e, v) => {
  */
 function get(configuration, callback) {
   callback = callback || cb;
-  let gid = "local";
-  let service = "status";
+  let gid = 'local';
+  let service = 'status';
   if (configuration === undefined || configuration === null) {
     callback(null, global.routesTable[gid][configuration]);
   }
@@ -37,18 +37,15 @@ function get(configuration, callback) {
     service = configuration;
   }
   if (
-    !global.routesTable ||
-    !global.routesTable[gid] ||
+    !global.routesTable || 
+    !global.routesTable[gid] || 
     !global.routesTable[gid][service]
   ) {
     const rpc = global.toLocal[service];
     if (rpc) {
-      callback(null, { call: rpc });
+      callback(null, {call: rpc});
     } else {
-      callback(
-        new Error(`Service ${service} in the ${gid} group does not exist`),
-        null
-      );
+      callback(new Error(`Service ${service} in the ${gid} group does not exist`), null);
       return;
     }
   } else {
@@ -66,7 +63,7 @@ function put(service, configuration, callback = cb) {
   let gid = "local";
 
   if (!service) {
-    return callback(new Error("Service cannot be null or undefined"));
+      return callback(new Error("Service cannot be null or undefined"));
   } else if (typeof service !== "object") {
     return callback(new Error("Service must be an object"));
   }
@@ -79,20 +76,13 @@ function put(service, configuration, callback = cb) {
     gid = configuration.gid || gid;
     configuration = configuration.service || "";
   } else if (typeof configuration !== "string") {
-    return callback(
-      new Error(
-        "Configuration must be a string or an object with a service key"
-      )
-    );
+    return callback(new Error("Configuration must be a string or an object with a service key"));
   }
 
   global.routesTable[gid] = global.routesTable[gid] || {};
   global.routesTable[gid][configuration] = service;
 
-  callback(
-    null,
-    `Successfully added service ${configuration} to the ${gid} group`
-  );
+  callback(null, `Successfully added service ${configuration} to the ${gid} group`);
 }
 
 /**
@@ -113,22 +103,14 @@ function rem(configuration, callback) {
       configuration = configuration.service;
     }
   } else if (typeof configuration !== "string") {
-    callback(
-      new Error(
-        "Configuration must be a string or an object with a service key"
-      ),
-      null
-    );
+    callback(new Error("Configuration must be a string or an object with a service key"), null);
   }
   if (
-    !global.routesTable ||
-    !global.routesTable[gid] ||
+    !global.routesTable || 
+    !global.routesTable[gid] || 
     !global.routesTable[gid][configuration]
   ) {
-    callback(
-      new Error(`Service ${configuration} for the ${gid} group does not exist`),
-      null
-    );
+    callback(new Error(`Service ${configuration} for the ${gid} group does not exist`), null);
     return;
   } else {
     delete global.routesTable[gid][configuration];

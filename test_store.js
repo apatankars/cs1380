@@ -1,9 +1,8 @@
-
 const local = distribution.local;
 const util = require("../util/util");
 const id = util.id;
 
-function mem(config) {
+function store(config) {
   const context = {};
   context.gid = config.gid || 'all';
   context.hash = config.hash || global.distribution.util.id.naiveHash;
@@ -32,12 +31,12 @@ function mem(config) {
       const chosenNID = context.hash(kid, nids);
 
       // 5) find the node config whose NID matches chosenNID
-      let chosenNode = nodeConfigs.find((nc) => id.getNID(nc) === chosenNID);
+      chosenNode = nodeConfigs.find((nc) => id.getNID(nc) === chosenNID);
       callback(null, chosenNode);
     });
   }
 
-  /* For the distributed mem service, the configuration will
+  /* For the distributed store service, the configuration will
           always be a string */
   return {
     get: (configuration, callback) => {
@@ -53,7 +52,7 @@ function mem(config) {
 
         // 6) Send the key to the chosen node
         const config = {
-          service: 'mem',
+          service: 'store',
           method: 'get',
           node: chosenNode
         };
@@ -71,7 +70,7 @@ function mem(config) {
             return;
           }
           callback(null, val);
-        });
+        })    
       });
     },
 
@@ -87,16 +86,17 @@ function mem(config) {
       }
 
       // 3) Get the correct node
-      getChosenNode(configuration , (err, chosenNode) => {
+      getChosenNode(configuration, (err, chosenNode) => {
         if (err) return callback(new Error('Could not find a node'), null);
+
         // 6) Send the key to the chosen node
         const config = {
-          service: 'mem',
+          service: 'store',
           method: 'put',
           node: chosenNode
         };
 
-        let messageConfig = {
+        const messageConfig = {
           key: configuration,
           gid: context.gid
         }
@@ -125,7 +125,7 @@ function mem(config) {
 
         // 6) Send the key to the chosen node
         const config = {
-          service: 'mem',
+          service: 'store',
           method: 'del',
           node: chosenNode
         };
@@ -135,7 +135,44 @@ function mem(config) {
           gid: context.gid
         }
 
-        const message = [messageConfig];
+        local.comm.send([messageConfig], config, (err, val) => {
+          if (err) {
+            callback(err, null);
+            return;
+          }
+          callback(null, val);
+        });
+      });
+    },
+
+    append: (state, configuration, callback) => {
+      callback = callback || cb;
+      if (state === undefined || state === null ){
+        callback(new Error('State is required'), null);
+        return;
+      }
+
+      if (configuration === null) {
+        configuration = id.getID(state);
+      }
+
+      // 3) Get the correct node
+      getChosenNode(configuration, (err, chosenNode) => {
+        if (err) return callback(new Error('Could not find a node'), null);
+
+        // 6) Send the key to the chosen node
+        const config = {
+          service: 'store',
+          method: 'append',
+          node: chosenNode
+        };
+
+        const messageConfig = {
+          key: configuration,
+          gid: context.gid
+        }
+
+        const message = [state, messageConfig];
 
         local.comm.send(message, config, (err, val) => {
           if (err) {
@@ -152,4 +189,4 @@ function mem(config) {
   };
 };
 
-module.exports = mem;
+module.exports = store;

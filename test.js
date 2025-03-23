@@ -1,390 +1,388 @@
+/** @typedef {import("../types").Callback} Callback */
+const { log } = require("console");
+const distribution = require("../../config");
+
+/**
+ * Map functions used for mapreduce
+ * @callback Mapper
+ * @param {any} key
+ * @param {any} value
+ * @returns {object[]}
+ */
+
+/**
+ * Reduce functions used for mapreduce
+ * @callback Reducer
+ * @param {any} key
+ * @param {Array} value
+ * @returns {object}
+ */
+
+/**
+ * @typedef {Object} MRConfig
+ * @property {Mapper} map
+ * @property {Reducer} reduce
+ * @property {string[]} keys
+ */
+
+/*
+  Note: The only method explicitly exposed in the `mr` service is `exec`.
+  Other methods, such as `map`, `shuffle`, and `reduce`, should be dynamically
+  installed on the remote nodes and not necessarily exposed to the user.
+*/
+
 function mr(config) {
   const context = {
     gid: config.gid || "all",
   };
 
-  const util = require("../util/util");
-  const id = util.id;
-
   /**
    * @param {MRConfig} configuration
    * @param {Callback} cb
+   * @return {void}
    */
   function exec(configuration, cb) {
-    // Generate a unique ID for this MapReduce task
-    const crypto = require("crypto");
-    const mrId = crypto.randomUUID().substring(0, 8);
-    const mrServiceName = `mr-${mrId}`;
+    const mrId = require("crypto").randomUUID().substring(0, 8);
+    const mrServiceName = `mr@${mrId}`; // mr@<uuid>
 
-    // Get the user-provided map and reduce functions
-    const mapFn = configuration.map;
-    const reduceFn = configuration.reduce;
-    const keys = configuration.keys || [];
+    let results = [];
 
-    // Track phase completions
-    let mapComplete = 0;
-    let shuffleComplete = 0;
-    let reduceComplete = 0;
-    let finalResults = [];
 
-    // Get total number of nodes in the group
-    distribution.local.groups.get(context.gid, (err, group) => {
-      if (err) return cb(err, null);
-      const totalNodes = Object.keys(group).length;
+    let state_dict = {
+      phase: "MAP",
+      phase_count: 0,
+    };
+    /**
+     * This is the notify service method which is called by each worker node whenever they are done with
+     * a stage of the MapReduce. This method tracks the number of responses until it reaches the group size
+     * at which point it makes a call each worker node to start the next part of the service. When the 
+     * reducer returns, it provides its outputs which are then returned by the exec method
+     * @param {*} config 
+     *    phase: string of "MAP", "REDUCE", "SHUFLLE"
+     *    status: string of "COMPLETED", "ERROR"
+     *    gid: string of the group ID
+     *    jid: string of the job ID (mr@<uuid>)
+     *  
+     * @param {*} cb 
+     */
+    const notify = (config, cb)  => {
+      // TODO: Does notify need like a "START" so that exec can call it and then notify actually handles
+      // TODO: coordinating all of the nodes together
 
-      // Create the notification service
-      const notifyService = {
-        notify: (data, callback) => {
-          const phase = data.phase;
-
-          if (phase === "map") {
-            mapComplete++;
-            if (mapComplete === totalNodes) {
-              startShufflePhase();
-            }
-          } else if (phase === "shuffle") {
-            shuffleComplete++;
-            if (shuffleComplete === totalNodes) {
-              startReducePhase();
-            }
-          } else if (phase === "reduce") {
-            if (data.result) {
-              finalResults = finalResults.concat(data.result);
-            }
-            reduceComplete++;
-            if (reduceComplete === totalNodes) {
-              // Clean up and return results
-              distribution.local.routes.rem(mrServiceName, () => {
-                cb(null, finalResults);
-              });
-            }
-          }
-          callback(null, "Notification received");
-        },
+      const phase_map = {
+        MAP: "SHUFFLE",
+        SHUFFLE: "REDUCE",
+        REDUCE: "DONE",
       };
-
-      // Register the notification service
-      distribution.local.routes.put(notifyService, mrServiceName, (err) => {
-        if (err) return cb(err, null);
-
-        // Register map handler
-        const mapHandler = {
-          execute: (data, callback) => {
-            const coordinator = data.coordinator;
-            const mapFunction = data.mapFunction;
-            const keysToProcess = data.keys || [];
-
-            // Store map results locally
-            const mapResults = [];
-            let processed = 0;
-
-            keysToProcess.forEach((key) => {
-              distribution.local.store.get(key, (err, value) => {
-                if (!err && value) {
-                  try {
-                    const result = mapFunction(key, value);
-                    if (result) {
-                      // Store each key-value pair for shuffling
-                      const tempKey = `map-${mrId}-${key}`;
-                      distribution.local.store.put(result, tempKey, () => {
-                        mapResults.push(tempKey);
-                        processed++;
-                        if (processed === keysToProcess.length) {
-                          // Store map keys for shuffle phase
-                          distribution.local.store.put(
-                            mapResults,
-                            `map-keys-${mrId}`,
-                            () => {
-                              notifyCoordinator("map", coordinator);
-                            }
-                          );
-                        }
-                      });
-                    } else {
-                      processed++;
-                    }
-                  } catch (e) {
-                    processed++;
-                  }
-                } else {
-                  processed++;
-                }
-
-                // Check if all keys processed (handles empty case too)
-                if (
-                  processed === keysToProcess.length &&
-                  processed > 0 &&
-                  mapResults.length === 0
-                ) {
-                  notifyCoordinator("map", coordinator);
-                }
-              });
-            });
-
-            // Handle empty keys array
-            if (keysToProcess.length === 0) {
-              notifyCoordinator("map", coordinator);
+      if (config.status === "ERROR") {
+            cb(Error(res.error), null);
+      }
+      // TODO: Consolidate this so that the nodeGroupSize is a variable that can just be referenced instead
+      // TODO: of having to make a redunant call to groups everytime that notify is called
+      
+      distribution.local.groups.get(config.gid, (err, group) => {
+            if (err) {
+              callback(err, null);
+              return;
             }
+            let groupNodeCount = Object.keys(group).length;
 
-            callback(null, "Map processing started");
-          },
-        };
+            // log(`Starting MapReduce job ${mrServiceName} for group ${config.gid} with ${groupNodeCount} nodes`);
+              state_dict.phase_count = state_dict.phase_count + 1;
 
-        // Register shuffle handler
-        const shuffleHandler = {
-          execute: (data, callback) => {
-            const coordinator = data.coordinator;
+              log(`Found state dictionary ${JSON.stringify(state_dict)}`);
 
-            // Get map results
-            distribution.local.store.get(`map-keys-${mrId}`, (err, mapKeys) => {
-              if (err || !mapKeys || mapKeys.length === 0) {
-                return notifyCoordinator("shuffle", coordinator);
+              if (config.phase !== state_dict.phase) {
+                cb(
+                  Error(
+                    `Error: Phase mismatch. Expected ${state_dict.phase}, got ${config.phase}`
+                  ),
+                  null
+                );
+                return;
               }
 
-              let shuffledKeys = [];
-              let processed = 0;
-
-              // Process each map result
-              mapKeys.forEach((mapKey) => {
-                distribution.local.store.get(mapKey, (err, mapResult) => {
-                  if (!err && mapResult) {
-                    // For each key-value pair in the map result
-                    Object.keys(mapResult).forEach((key) => {
-                      // Determine target node for this key
-                      distribution.local.groups.get(
-                        context.gid,
-                        (err, group) => {
-                          if (err) return;
-
-                          const nodes = Object.values(group);
-                          const nodeIDs = nodes.map((n) => id.getNID(n));
-                          const keyID = id.getID(key);
-                          const targetNodeID = id.naiveHash(keyID, nodeIDs);
-                          const targetNode = nodes.find(
-                            (n) => id.getNID(n) === targetNodeID
-                          );
-
-                          // If this is the target node, store locally
-                          if (
-                            id.getNID(targetNode) ===
-                            id.getNID(global.nodeConfig)
-                          ) {
-                            const shuffleKey = `shuffle-${mrId}-${key}`;
-
-                            // Get existing values or create new array
-                            distribution.local.store.get(
-                              shuffleKey,
-                              (err, values) => {
-                                const allValues = values || [];
-                                allValues.push(mapResult[key]);
-
-                                // Store updated values
-                                distribution.local.store.put(
-                                  allValues,
-                                  shuffleKey,
-                                  () => {
-                                    if (!shuffledKeys.includes(shuffleKey)) {
-                                      shuffledKeys.push(shuffleKey);
-                                    }
-                                  }
-                                );
-                              }
-                            );
-                          } else {
-                            // Send to target node
-                            const msg = { key, value: mapResult[key], mrId };
-                            const remote = {
-                              service: `shuffle-receive-${mrId}`,
-                              method: "receive",
-                              node: targetNode,
-                            };
-                            distribution.local.comm.send(msg, remote, () => {});
-                          }
-                        }
-                      );
-                    });
-                  }
-
-                  processed++;
-                  if (processed === mapKeys.length) {
-                    // Store shuffle keys for reduce phase
-                    setTimeout(() => {
-                      distribution.local.store.put(
-                        shuffledKeys,
-                        `reduce-keys-${mrId}`,
-                        () => {
-                          notifyCoordinator("shuffle", coordinator);
-                        }
-                      );
-                    }, 500); // Small delay to ensure all shuffle operations complete
-                  }
-                });
-              });
-            });
-
-            callback(null, "Shuffle processing started");
-          },
-        };
-
-        // Register shuffle receive handler
-        const shuffleReceiveHandler = {
-          receive: (data, callback) => {
-            const key = data.key;
-            const value = data.value;
-            const taskId = data.mrId;
-
-            const shuffleKey = `shuffle-${taskId}-${key}`;
-
-            // Get existing values or create new array
-            distribution.local.store.get(shuffleKey, (err, values) => {
-              const allValues = values || [];
-              allValues.push(value);
-
-              // Store updated values
-              distribution.local.store.put(allValues, shuffleKey, callback);
-            });
-          },
-        };
-
-        // Register reduce handler
-        const reduceHandler = {
-          execute: (data, callback) => {
-            const coordinator = data.coordinator;
-            const reduceFnStr = data.reduceFnStr;
-            const reduceFunction = eval(`(${reduceFnStr})`);
-
-            // Get reduce keys
-            distribution.local.store.get(
-              `reduce-keys-${mrId}`,
-              (err, reduceKeys) => {
-                if (err || !reduceKeys || reduceKeys.length === 0) {
-                  return notifyCoordinator("reduce", coordinator, []);
+              if (state_dict.phase === "REDUCE") {
+                if (config.results) {
+                  results.push(config.results);
                 }
-
-                const results = [];
-                let processed = 0;
-
-                // Process each reduce key
-                reduceKeys.forEach((shuffleKey) => {
-                  // Extract original key from shuffle key
-                  const originalKey = shuffleKey.substring(
-                    `shuffle-${mrId}-`.length
-                  );
-
-                  // Get values for this key
-                  distribution.local.store.get(shuffleKey, (err, values) => {
-                    if (!err && values) {
-                      try {
-                        // Apply reduce function
-                        const result = reduceFunction(originalKey, values);
-                        if (result) {
-                          results.push(result);
-                        }
-                      } catch (e) {
-                        // Continue even if reduce fails
-                      }
-                    }
-
-                    processed++;
-                    if (processed === reduceKeys.length) {
-                      notifyCoordinator("reduce", coordinator, results);
-                    }
-                  });
-                });
               }
-            );
 
-            callback(null, "Reduce processing started");
-          },
+              // When we update the state dictionary, we check if the phase_count === workerCount to know if we are done
+              if (state_dict.phase_count === groupNodeCount) {
+                // we move onto the next phase
+                if (state_dict.phase === "REDUCE") {
+                  // TODO: When reduce is finished, we want to collect all of the results and demolish all of our eph
+                  cb(null, "DONE");
+                  return;
+                }
+                // otherwise we update the phase and phase count to the next phase
+                let new_phase = phase_map[state_dict.phase];
+                state_dict.phase = new_phase;
+                state_dict.phase_count = 0;
+                // TODO: Now we send a message to all nodes to start their next phase
+                const endPoint = mrServiceName;
+                const method = state_dict.phase.toLowerCase();
+
+                // const remote = {service: endPoint, method: method};
+
+                // TODO: The message will vary depending on the endPoint
+                // make each worker node call the notify method for the next phase
+                
+                // const message = [{}] 
+                // distribution[context.gid].send(
+              }
+          })
         };
 
-        // Helper to notify coordinator
-        function notifyCoordinator(phase, coordinator, result) {
-          const remote = {
-            service: mrServiceName,
-            method: "notify",
-            node: coordinator,
-          };
+    /**
+     * 
+     * @param {*} config
+     *    mapper: this is the serialized version of the user provided mapper
+     *    gid: this is the groupID 
+     *    jid: this is the jobID (mr@<uuid>)
+     * @param {*} cb 
+     */
+    const map = (config, cb) => {
+      // Config object should contain the serialized user map function
+      const ser_mapper = config.mapper;
+      const gid = config.gid;
+      const job_id = config.jid;
+      const mapper = distribution.util.deserialize(ser_mapper);
 
-          const message = { phase };
-          if (result) {
-            message.result = result;
+      // Get the service for this job
+      distribution.local.routes.get({gid: gid, service: job_id}, (err, service) => {
+        // get the keys for the group
+        distribution.local.store.getGroupKeys(gid, (err, keys) => {
+          if (err) {
+            cb(err, null);
+            return;
           }
 
-          distribution.local.comm.send(message, remote, () => {});
-        }
-
-        // Function to start shuffle phase
-        function startShufflePhase() {
-          distribution[context.gid].routes.put(
-            shuffleHandler,
-            `shuffle-${mrId}`,
-            () => {
-              distribution[context.gid].routes.put(
-                shuffleReceiveHandler,
-                `shuffle-receive-${mrId}`,
-                () => {
-                  const remote = {
-                    service: `shuffle-${mrId}`,
-                    method: "execute",
-                  };
-
-                  const message = {
-                    coordinator: global.nodeConfig,
-                    mrId: mrId,
-                  };
-
-                  distribution[context.gid].comm.send(
-                    message,
-                    remote,
-                    () => {}
-                  );
+          if (!keys || keys.length === 0) {
+            // No keys to process on this node, but still notify completion
+            const mapResultName = "map@" + job_id;
+            distribution.local.store.put([], {key: mapResultName, gid: gid}, (err) => {
+              if (err) {
+                cb(err, null);
+                return;
+              }
+              // Notify that the map phase is completed
+              service.notify({phase: "MAP", status: "COMPLETED"}, (err, res) => {
+                if (err) {
+                  cb(err, null);
                 }
-              );
-            }
-          );
-        }
+                cb(null, "DONE");
+              });
+            });
+            return;
+          }
 
-        // Function to start reduce phase
-        function startReducePhase() {
-          distribution[context.gid].routes.put(
-            reduceHandler,
-            `reduce-${mrId}`,
-            () => {
-              const remote = {
-                service: `reduce-${mrId}`,
-                method: "execute",
-              };
+          // Array to hold the results of the map operation
+          let mapResults = [];
+          // Counter for pending operations
+          let pendingOperations = keys.length;
+          // Flag to track if an error has occurred
+          let hasError = false;
 
-              const message = {
-                coordinator: global.nodeConfig,
-                reduceFnStr: reduceFn.toString(),
-                mrId: mrId,
-              };
+          // Process each key
+          keys.forEach((key) => {
+            // Get the value for this key
+            distribution.local.store.get({ key: key, gid: gid }, (err, value) => {
+              // If we already encountered an error, don't continue processing
+              if (hasError) return;
 
-              distribution[context.gid].comm.send(message, remote, () => {});
-            }
-          );
-        }
+              if (err) {
+                hasError = true;
+                cb(err, null);
+                return;
+              }
 
-        // Start the map phase
-        distribution[context.gid].routes.put(mapHandler, `map-${mrId}`, () => {
-          const remote = {
-            service: `map-${mrId}`,
-            method: "execute",
-          };
-
-          const message = {
-            coordinator: global.nodeConfig,
-            mapFunction: mapFn,
-            keys: keys,
-            mrId: mrId,
-          };
-
-          distribution[context.gid].comm.send(message, remote, () => {});
+              try {
+                // Apply the mapper function
+                let res = mapper(key, value);
+                
+                // Make sure result is an array
+                if (!Array.isArray(res)) {
+                  res = [res];
+                }
+                
+                // Add results to our collection
+                mapResults = mapResults.concat(res);
+                
+                // Decrement the counter of pending operations
+                pendingOperations--;
+                
+                // If all operations are done, store results and notify completion
+                if (pendingOperations === 0) {
+                  const mapResultName = "map@" + job_id;
+                  distribution.local.store.put(mapResults, {key: mapResultName, gid: gid}, (err) => {
+                    if (err) {
+                      cb(err, null);
+                      return;
+                    }
+                    service.notify({phase: "MAP", status: "COMPLETED"}, (err, res) => {
+                      if (err) {
+                        cb(err, null);
+                        return;
+                      }
+                      cb(null, "DONE");
+                      return;
+                    });
+                  });
+                }
+              } catch (mapError) {
+                if (!hasError) {
+                  hasError = true;
+                  cb(mapError, null);
+                }
+              }
+            });
+          });
         });
       });
+    } // This is the end of the map method
+
+    /**
+     * For each node it should send the results of the map phase to the designated node 
+     * using the given hash function provided by the user
+     * @param {*} config 
+     *    gid: this is the groupID
+     *    job_id: this is the jobID (mr@<uuid>)
+     *    node_list : this is the list of nodes to send the data to
+     *    hash: this is the hash function provided by the user
+     * @param {*} cb 
+     */
+    const shuffle = (config, cb) => {
+
+      const gid = config.gid;
+      const jid = config.jid;
+      const node_list = config.node_list;
+      const prov_hash = config.hash;
+
+      // Get the service for this job
+      distribution.local.routes.get({gid: gid, serivce: jid}, (err, service) => {
+        // Get the map results from the local store
+        distribution.local.store.get({key: "map@" + jid, gid: config.gid}, (err, mapResults) => {
+          // mapResults contains the unserialized map results
+          if (err) {
+            service.notify({phase: "SHUFFLE", status: "ERROR"}, (err, res) => {
+              cb(err, null);
+              return;
+            });
+          }
+
+          // Now we have the map results, we need to distribute them to the correct nodes
+          const entrySize = mapResults.length;
+
+          let entriesProcessed = 0;
+          
+          Object.entries(mapResults).forEach(([key, value]) => {
+            
+            distribution[gid].store.append(value, "reduce@" + jid, (err, res) => {
+              if (err) {
+                cb(err, null);
+                return;
+              }
+              if (++entriesProcessed === entrySize) {
+                service.notify({phase: "SHUFFLE", status: "COMPLETED"}, (err, res) => {
+                  if (err) {
+                    cb(err, null);
+                    return;
+                  }
+                  cb(null, "DONE");
+                  return;
+                });
+              }
+            });
+          })
+        });
+      });
+    }
+
+    /**
+     * The reduce function should pull all of the local information and then call the user provided reduce function
+     * @param {*} config 
+     * @param {*} cb 
+     */
+    const reduce = (config, cb) => {
+
+      const ser_reduce = config.reducer;
+      const gid = config.gid;
+      const jid = config.jid;
+      const reducer = distribution.util.deserialize(ser_reduce);
+      let reduceResults = {};
+
+      // Get the service for this job
+      distribution.local.routes.get({gid: gid, service: jid}, (err, service) => {
+        // Get the shuffle results from the local store
+        distribution.local.store.get({key: "reduce@" + jid, gid: gid}, (err, reduceResults) => {
+          // So now we have the shuffled results
+          if (err) {
+            cb(err, null);
+            return;
+          }
+
+          let index = {};
+
+          Object.entries(reduceResults).forEach(([key, value]) => {
+            if (!index[key]) {
+              index[key] = [];
+            }
+            index[key].push(value);
+          });
+
+          Object.entries(index).forEach(([key, value]) => {
+            let res = reducer(key, value);
+            if (!Array.isArray(res)) {
+              res = [res];
+            }
+            reduceResults = {...reduceResults, ...res};
+          });
+        });
+      });
+    };
+
+    // This is handling the setup of the MapReduce job
+    // First we create the servive object for the job
+    let notifyRPC = distribution.util.wire.createRPC(distribution.util.wire.toAsync(notify));
+
+    let mrServiceObject = {};
+    mrServiceObject[notify] = notifyRPC;
+    mrServiceObject[map] = map;
+    mrServiceObject[shuffle] = shuffle;
+
+    // TODO: Put the new serviceObject on all of the worker nodes 
+    // TODO: Then, call `notify` to start the first phase of the MR job
+
+
+
+        
+    const setupConfig = {
+          service: mrServiceName,
+          method: "map"
+        }
+    const setupMessage = [configuration.mapper, config.gid, config.jid];
+    distribution[config.gid].comm.send(setupMessage, setupConfig, (err, res) => {
+      if (err) {
+        cb(err, null);
+        return;
+      }
+      cb(null, "DONE");
+      return;
     });
+
+    // Now we publicly expose the route so other nodes can call this notify service
+    // distribution[context.gid].routes.put(); // 
+
+    // TODO: ISSUE: how do we get other nodes to be able to know to this MR job's notify service (mr-<uuid>)
+    // TODO: need to figure out a way to get other nodes to call this coordinator's node notify method
+    // TODO: My understanding is that we need to create a notify service on the coordinator node. Then we create 
+    // TODO: A map, shuffle, and reduce endpoint services at <phase>@mr-<uuid> and then we create this route on all nodes
+    // TODO: The issue is, how do these map, shuffle, and reduce services know to call the notify service on the coordinator node when they are done
+    // TODO: I think I am confused on what notify is really doing, and how it is doing it 
+        
+      
   }
 
   return { exec };

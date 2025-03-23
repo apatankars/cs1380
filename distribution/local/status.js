@@ -1,12 +1,11 @@
-const id = require('../util/id');
 const log = require('../util/log');
 
 const status = {
 };
 
 global.moreStatus = {
-  sid: id.getSID(global.nodeConfig),
-  nid: id.getNID(global.nodeConfig),
+  sid: global.distribution.util.id.getSID(global.nodeConfig),
+  nid: global.distribution.util.id.getNID(global.nodeConfig),
   counts: 0,
 };
 
@@ -21,15 +20,10 @@ const cb = (e, v) => {
 status.get = function(configuration, callback) {
   callback = callback || cb;
   if (!configuration) {
-    if (typeof callback !== 'function') {
-      configuration = callback;
-      callback = cb;
-    } else {
-      callback(null, "No configuration specified");
-      return;
-    }
+    callback(new Error('Configuration is required'), {});
+    return;
   }
-  switch(configuration ) {
+  switch(configuration) {
     case 'sid':
       callback(null, global.moreStatus.sid);
       break;
@@ -52,14 +46,12 @@ status.get = function(configuration, callback) {
       callback(null, process.memoryUsage().heapUsed);
       break;
     default:
-      callback(new Error('Status key not found'), null);
+      callback(new Error(`Status property "${configuration}" not found`), null);
   }
 };
 
-status.spawn = function(configuration, callback) {
-};
+status.spawn = require('@brown-ds/distribution/distribution/local/status').spawn;
 
-status.stop = function(callback) {
-};
+status.stop = require('@brown-ds/distribution/distribution/local/status').stop; 
 
 module.exports = status;

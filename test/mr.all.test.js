@@ -16,15 +16,19 @@ const n3 = {ip: '127.0.0.1', port: 7112};
 
 test('(20 pts) all.mr:ncdc', (done) => {
   const mapper = (key, value) => {
+    console.log('Mapper called with key: ' + key);
     const words = value.split(/(\s+)/).filter((e) => e !== ' ');
     const out = {};
     out[words[1]] = parseInt(words[3]);
+    console.log('Mapper output: ' + JSON.stringify(out));
     return [out];
   };
 
   const reducer = (key, values) => {
+    console.log('Reducer called with key: ' + key);
     const out = {};
     out[key] = values.reduce((a, b) => Math.max(a, b), -Infinity);
+    console.log('Reducer output: ' + JSON.stringify(out));
     return out;
   };
 
@@ -57,6 +61,7 @@ test('(20 pts) all.mr:ncdc', (done) => {
     distribution.ncdc.store.put(value, key, (e, v) => {
       cntr++;
       // Once the dataset is in place, run the map reduce
+      console.log('Storing value: ' + value);
       if (cntr === dataset.length) {
         doMapReduce();
       }
@@ -209,6 +214,7 @@ beforeAll((done) => {
     distribution.local.status.spawn(n1, (e, v) => {
       distribution.local.status.spawn(n2, (e, v) => {
         distribution.local.status.spawn(n3, (e, v) => {
+          console.log('All nodes started');
           cb();
         });
       });

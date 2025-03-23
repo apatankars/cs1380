@@ -725,6 +725,7 @@ beforeAll((done) => {
                 distribution.local.status.spawn(n7, (e, v) => {
                   distribution.local.status.spawn(n8, (e, v) => {
                     distribution.local.status.spawn(n9, (e, v) => {
+                      console.log("All nodes started");
                       cb()
                     });
                   });
