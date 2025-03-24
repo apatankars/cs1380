@@ -1,6 +1,6 @@
 /** @typedef {import("../types").Callback} Callback */
-const { log } = require("console");
-const distribution = require("../../config");
+// const { log } = require("console");
+// const distribution = require("../../config");
 
 /**
  * Map functions used for mapreduce
@@ -42,7 +42,7 @@ function mr(config) {
    * @return {void}
    */
   function exec(configuration, cb) {
-    const mrId = require("crypto").randomUUID().substring(0, 8);
+    const mrId = require("crypto").randomUUID().substring;
     const mrServiceName = `mr@${mrId}`; // mr@<uuid>
 
     let results = [];
@@ -66,8 +66,7 @@ function mr(config) {
      * @param {*} cb 
      */
     const notify = (config, cb)  => {
-      // TODO: Does notify need like a "START" so that exec can call it and then notify actually handles
-      // TODO: coordinating all of the nodes together
+
 
       const phase_map = {
         MAP: "SHUFFLE",
@@ -257,8 +256,6 @@ function mr(config) {
 
       const gid = config.gid;
       const jid = config.jid;
-      const node_list = config.node_list;
-      const prov_hash = config.hash;
 
       // Get the service for this job
       distribution.local.routes.get({gid: gid, serivce: jid}, (err, service) => {
@@ -306,81 +303,99 @@ function mr(config) {
      * @param {*} cb 
      */
     const reduce = (config, cb) => {
-
-      const ser_reduce = config.reducer;
+      // Config object should contain the serialized user reduce function
+      const ser_reducer = config.reducer;
       const gid = config.gid;
-      const jid = config.jid;
-      const reducer = distribution.util.deserialize(ser_reduce);
-      let reduceResults = {};
+      const job_id = config.jid;
+      const reducer = distribution.util.deserialize(ser_reducer);
 
       // Get the service for this job
-      distribution.local.routes.get({gid: gid, service: jid}, (err, service) => {
-        // Get the shuffle results from the local store
-        distribution.local.store.get({key: "reduce@" + jid, gid: gid}, (err, reduceResults) => {
-          // So now we have the shuffled results
+      distribution.local.routes.get({gid: gid, service: job_id}, (err, service) => {
+        // get the reduce job stored object for the group
+        const shuffleResultName = "reduce@" + job_id;
+        distribution.local.store.get({key: shuffleResultName, gid: gid}, (err, shuffleResults) => {
           if (err) {
             cb(err, null);
             return;
           }
 
-          let index = {};
+          if (!shuffleResults || Object.keys(shuffleResults).length === 0) {
+            // No keys to process on this node, but still notify completion
+            // Notify that the map phase is completed
+            service.notify({phase: "REDUCE", status: "COMPLETED", results: []}, (err, res) => {
+              if (err) {
+                cb(err, null);
+              }
+              cb(null, "DONE");
+            });
+            return;
+          }
 
-          Object.entries(reduceResults).forEach(([key, value]) => {
-            if (!index[key]) {
-              index[key] = [];
-            }
-            index[key].push(value);
-          });
+          // Array to hold the results of the map operation
+          let reduceResults = [];
+          // Counter for pending operations
+          let pendingOperations = Object.keys(shuffleResults).length;
+          // Flag to track if an error has occurred
+          let hasError = false;
 
-          Object.entries(index).forEach(([key, value]) => {
-            let res = reducer(key, value);
-            if (!Array.isArray(res)) {
-              res = [res];
+          // Process each key
+          Object.keys(shuffleResults).forEach((key) => {
+            // Get the value for this key
+            let value = shuffleResults[key];
+            
+            // If we already encountered an error, don't continue processing
+            if (hasError) return;
+
+            try {
+              // Apply the mapper function
+              let res = reducer(key, value);
+              
+              // Add results to our collection
+              reduceResults = reduceResults.push(res);
+              
+              // Decrement the counter of pending operations
+              pendingOperations--;
+              
+              // If all operations are done, store results and notify completion
+              if (pendingOperations === 0) {
+                service.notify({phase: "REDUCE", status: "COMPLETED", results: reduceResults}, (err, res) => {
+                  if (err) {
+                    cb(err, null);
+                    return;
+                  }
+                  cb(null, "DONE");
+                  return;
+                });
+              }
+            } catch (mapError) {
+              if (!hasError) {
+                hasError = true;
+                cb(mapError, null);
+              }
             }
-            reduceResults = {...reduceResults, ...res};
+
           });
         });
       });
-    };
+    } // This is the end of the map method
 
-    // This is handling the setup of the MapReduce job
-    // First we create the servive object for the job
+    
+
     let notifyRPC = distribution.util.wire.createRPC(distribution.util.wire.toAsync(notify));
 
-    let mrServiceObject = {};
-    mrServiceObject[notify] = notifyRPC;
-    mrServiceObject[map] = map;
-    mrServiceObject[shuffle] = shuffle;
-
-    // TODO: Put the new serviceObject on all of the worker nodes 
-    // TODO: Then, call `notify` to start the first phase of the MR job
-
-
-
-        
-    const setupConfig = {
-          service: mrServiceName,
-          method: "map"
-        }
-    const setupMessage = [configuration.mapper, config.gid, config.jid];
-    distribution[config.gid].comm.send(setupMessage, setupConfig, (err, res) => {
+    let mrServiceObject = {
+      notify: notifyRPC,
+      map: map,
+      shuffle: shuffle,
+      reduce: reduce
+    };
+    
+    distribution[context.gid].routes.put(mrServiceObject, mrServiceName, (err, res) => {
       if (err) {
         cb(err, null);
         return;
       }
-      cb(null, "DONE");
-      return;
     });
-
-    // Now we publicly expose the route so other nodes can call this notify service
-    // distribution[context.gid].routes.put(); // 
-
-    // TODO: ISSUE: how do we get other nodes to be able to know to this MR job's notify service (mr-<uuid>)
-    // TODO: need to figure out a way to get other nodes to call this coordinator's node notify method
-    // TODO: My understanding is that we need to create a notify service on the coordinator node. Then we create 
-    // TODO: A map, shuffle, and reduce endpoint services at <phase>@mr-<uuid> and then we create this route on all nodes
-    // TODO: The issue is, how do these map, shuffle, and reduce services know to call the notify service on the coordinator node when they are done
-    // TODO: I think I am confused on what notify is really doing, and how it is doing it 
         
       
   }

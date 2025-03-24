@@ -61,7 +61,6 @@ test('(20 pts) all.mr:ncdc', (done) => {
     distribution.ncdc.store.put(value, key, (e, v) => {
       cntr++;
       // Once the dataset is in place, run the map reduce
-      console.log('Storing value: ' + value);
       if (cntr === dataset.length) {
         doMapReduce();
       }

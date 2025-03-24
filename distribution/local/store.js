@@ -243,24 +243,48 @@ function append(state, configuration, callback) {
         return callback(new Error('Error parsing existing data: ' + e.message), null);
       }
       
-      // Convert existing data to array if it's not one already
-      let dataArray = Array.isArray(existingData) ? existingData : [existingData];
+      // New merging logic
+      let result = existingData;
       
-      // Append new state to the array
-      dataArray.push(state);
+      // If existing data is not an object, convert to object for merging
+      if (Array.isArray(existingData)) {
+        // Handle legacy data - convert array to object if needed
+        result = existingData.reduce((acc, item) => {
+          Object.keys(item).forEach(key => {
+            if (!acc[key]) acc[key] = [];
+            acc[key].push(item[key]);
+          });
+          return acc;
+        }, {});
+      }
       
-      // Serialize and save the updated array
-      const serialized = util.serialize(dataArray);
+      // Now merge the new state
+      Object.keys(state).forEach(key => {
+        if (!result[key]) {
+          result[key] = [state[key]]; // Initialize as array
+        } else if (!Array.isArray(result[key])) {
+          result[key] = [result[key], state[key]]; // Convert to array and append
+        } else {
+          result[key].push(state[key]); // Already an array, just append
+        }
+      });
+      
+      // Serialize and save the updated result
+      const serialized = util.serialize(result);
       const value = JSON.stringify(serialized);
       
       fs.writeFile(filePath, value, (err) => {
         if (err) return callback(err, null);
-        return callback(null, dataArray);
+        return callback(null, result);
       });
     });
   } else {
-    // If file doesn't exist, create a new one with state wrapped in an array
-    let initialData = [state];
+    // If file doesn't exist, create a new one with state keys initialized as arrays
+    let initialData = {};
+    
+    Object.keys(state).forEach(key => {
+      initialData[key] = [state[key]];
+    });
     
     const serialized = util.serialize(initialData);
     const value = JSON.stringify(serialized);
