@@ -172,7 +172,7 @@ function store(config) {
           node: chosenNode
         };
 
-        console.log("SENDING APPEND MESSAGE TO NODE:", chosenNode.port, "with configuration:", configuration);
+        // console.log("SENDING APPEND MESSAGE TO NODE:", chosenNode.port, "with configuration:", configuration);
 
         const messageConfig = {
           key: "reduce@" + configuration.jid,

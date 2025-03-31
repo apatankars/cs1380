@@ -25,16 +25,14 @@ const n3 = {ip: '127.0.0.1', port: 7112};
 // let spawnNode = nodeList[index - 1];
 // console.log(spawnNode)
 
-// const remote = {service: 'status', method: 'stop'};
-// remote.node = n1;
-// distribution.local.comm.send([], remote, (e, v) => {
-//     remote.node = n2;
-//     distribution.local.comm.send([], remote, (e, v) => {
-//         remote.node = n3;
-//             distribution.local.comm.send([], remote, (e, v) => {
-//                 process.exit(0);
-//         })
-//     });
-// });
-const value = "{\"id\":\"2c388b73-722c-4e96-9300-8d5bb40f7cff\",\"type\":\"object\",\"value\":{\"docb\":\"{\\\"id\\\":\\\"c3273988-9eea-43ab-a257-00c8cf0c0749\\\",\\\"type\\\":\\\"object\\\",\\\"value\\\":{\\\"totalLength\\\":\\\"{\\\\\\\"type\\\\\\\":\\\\\\\"number\\\\\\\",\\\\\\\"value\\\\\\\":\\\\\\\"28\\\\\\\"}\\\",\\\"wordCount\\\":\\\"{\\\\\\\"type\\\\\\\":\\\\\\\"number\\\\\\\",\\\\\\\"value\\\\\\\":\\\\\\\"4\\\\\\\"}\\\"}}\"}}"
-console.log(distribution.util.deserialize(value));
+const remote = {service: 'status', method: 'stop'};
+remote.node = n1;
+distribution.local.comm.send([], remote, (e, v) => {
+    remote.node = n2;
+    distribution.local.comm.send([], remote, (e, v) => {
+        remote.node = n3;
+            distribution.local.comm.send([], remote, (e, v) => {
+                process.exit(0);
+        })
+    });
+});

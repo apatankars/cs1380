@@ -1,37 +1,35 @@
 # M4: Distributed Storage
 
 ## Summary
-In milestone 4, I implemented a distributed key-value storage system that uses consistent hashing and rendezvous hashing to efficiently distribute data across multiple nodes in our systems. The implementation includes both the local and distributed versions of in-memory (mem) and disc (store) storage services.
+In milestone 5, I implemented a custom map-reduce implementation. This is used for distirbuted execution and will be highly useful in our distributed search engine final project. This was an insnaely hard milestone for as I could not figure out where my errors were coming from. However, ultimately I think I have produced a good implementation of the map-reduce processing engine that is able to take an input map and reduce function for a dataset, and properly communicate with all worker nodes in the group to coordinate the reduction of the data. 
 
-For the local services, I wrote implementations that store and retrieve data either in memory using a JavaScript object or on disk using the fs module to write custom files. The distributed services build upon these and use hashing algorithms to determine which node in a group should handle a specific object based on its key.
+This assignment took me a total of 35-45 hours to complete. I took many late days on this project and found it to be incredibly challenging.
 
 ### Key Challenges:
-- Implementing proper key management to distinguish between identical keys across different node groups. In order to solve this, the local memory services maps first to the `gid` and then to the key. This same schema is used in the `store` service. These always default to the `local` group.
-- Initally, I was facing some challenges with actually trying to write to write the data to the disc. I was initally confused as to how to actually implement the same schema from `mem` in `store` since now I had to create directories and they had to be unique to that node. At first, I forgot we even had access to `global.nodeConfig`, but once I figured that out and the API specifications for the `fs` module, I was able to properly implement my desired disc storage schema.
-- Setting up the AWS instances to test performance at scale was insanely hard. This may have been the longest part of the assignment for me. I found it really hard to conceptualize how to actually get the nodes to communicate with each other now. I understood how to do this on my local machine, but now these requests needed to actually happen. The first big issue was figuring out how to spawn the nodes. I had to create new AWS instances that allowed for HTTP connections and a custom TCP protocol. Using this, I thought I would be able to use their public IPs so I could properly set the node configurations. Initally, I had a singular `JS` file that I was deploying and calling on all nodes. This file would do different things depending on the `nodeIdx` I provided it (i.e properly set up the distributed group). However, my big issue was that I had no way of figuring out how to actually get the nodes to communicate since everything I was trying wasn't working (i.e. each node was trying to spawn itself using its public IP). Ultimately, it was after souring on Ed I realized how to set up the nodes to properly communicate where they are spawned from the `ip: 0.0.0.0.0/0`, but they can be contacted through their public IPs. Using this, I have a local script that connects to the nodes, creates the group, and properly measures the performance of the services.
-
+- The role of notify in this coordination was easy to understand conceptually, but very hard to understand how to implement in code. I found myself really confused initally on how worker nodes could properly communicate back with the coordinator. I played around with ideas such as sending the coordinators ip and port with every notify, but it felt wrong and redundant. I ultiamtely realized I could use an RPC function to properly handle this which then allowed me to figure out how to properly handle cross-node communication.
+- Another issue I had which was really dumb on me was I was first serializing the user provided functions and sending them to the map and reduce on each worker. However, I ultimately realzied I could just also place them on the service object I was putting on every node.
+- A major issue I was facing was figuring out how to hold the user callback until the end. This was very hard because I honestly didn't really understand what was special about callbacks and what they really changed. I am honestly still a little confused, but I figured it out by just calling the user callback once in the entire function. I am still confused on the what is the scope of the variables within the service. 
+- Another big issue I was having was with the append function I wrote. I kept running into serialization issues and it would result in the JSON being written incorredctly. This meant the reducer wouldn't read the values right or at all and I would get the wrong answer.
 ## Correctness & Performance Characterization
 
-### *Correctness*: 
-I developed 5 custom test cases to validate the system's functionality. These cases are focused on the edge cases of my implementation:
-1. Local memory service test - verifying that the local memory storage works and can properly distinguish between identical keys and objects in different groups
-2. Local store service test - this is very similar to the local memory service test, as it also tests to make sure the service works and distinguishes between groups
-3. Consistent hashing test - this test was aimed at the verifying the consistent hash function works by validing the correct node and route 
-4. Rendezvous hashing test - this is similar as the above one by ensuring proper data distribution across group3
-5. Key generation test - this is just a test to ensure that when no key is provided, the auto-generated key is the sha256 hash of the object.
+### Correctness
 
-All tests complete in 1198 milliseconds and validate the core functionality of both local and distributed storage services.
+I wrote 5 comprehensive test cases testing different MapReduce workflows to ensure correctness across various data processing scenarios:
 
-### *Performance*:
-I deployed my custom distributed system on 3 AWS nodes with special TCP protocol and measured both put and get performance for both services. As mentioned above, this was a real struggle, but in order to measure performance, my `performance/distributedMem.js` file is home to everything. First, I wrote a function to generate random strings which given a length, will randomly sample the alphabet and generate a `key`. Then using this, I populate a dictionary with each key and its corresponding value (which is also an object). I then spawn a local node that then creates the group with the three AWS nodes. Finally, I call my measure functions which properly call the corresponding functions and aggregate their results. Here is what I produced:
+1. **Word Count**: Tests the ability to count occurrences of each word across multiple documents, validating basic mapping and aggregation.
+2. **Temperature Analysis by Month**: Tests processing of structured weather data, extracting temporal information and finding maximum values per time period.
+3. **Stock Price Analysis**: Tests the system's ability to handle JSON data and perform averaging calculations across multiple records for each entity.
+4. **Server Log Analysis**: Tests pattern recognition within semi-structured text data, extracting and aggregating information using regular expressions.
+5. **E-commerce Sales Analysis**: Tests handling of JSON data with numerical operations (multiplication and addition) and categorical grouping.
 
-**`MEM`**   
-    - For put I was able to achieve a throughput of 2544.53 ops/second with an average latency of 249.82ms.
-    - For get I was able to achieve a throughput of 4716.98 ops/second with an average latency of 115.15ms.
+Each test validates both functional correctness (expected outputs match actual outputs) and the system's ability to handle different data formats and processing requirements.
 
-**`STORE`**   
-    - For put I was able to achieve a throughput of 2403.85 ops/second with an average latency of 218.96ms.
-    - For get I was able to achieve a throughput of 2816.90 ops/second with an average latency of 234.88ms.
+### Performance
 
-## Key Feature
-The `reconf` method designed to first identify all the keys to be relocated and then relocate individual objects instead of fetching all the objects immediately and then pushing them to their corresponding locations because that would be pretty silly. As we discovered from our use of hash functions beyond the basic modulus by the size of group, we do not need necessarily need to redistribute the data within all of our nodes. These alternative hash functions, such as consistent hashing, allow for a only a subset of nodes to be affected when a new node is added or removed. Therefore, in `reconf`, the approach to first identify the keys to be relocated and then move them avoids the overhead of processing keys that are already correctly located and do not need to moved which significantly reduces network load for large systems. It also prevents network congestion by processing data in manageable batches of nodes that needs changes, allowing the system to rebalance gradually rather than experiencing a sudden spike in a large reconfiguration. Another consider is likely that by relocating objects one at a time, the system is able to more effectively tolerate errors and failures since the entire system is not being overloaded. This implementation scales much better with increasing numbers of objects and nodes as it allocates computational and network resources only where needed. Furthermore, with these alternative hash functions, there is no need to reconfigure all of the data in the system at once.
+I characterized the performance of the WordCount workflow using a custom benchmark script that measures both latency and throughput across varying dataset sizes.
+
+My WordCount workflow achieves an average throughput of approximately 38 documents per second with small datasets (5 documents), decreasing to 12 documents per second with larger datasets (50 documents). The average latency ranges from 131 milliseconds for small datasets to 4183 milliseconds for larger datasets.
+
+The scalability analysis shows that latency increases roughly linearly with dataset size up to 20 documents, then increases super-linearly beyond that, indicating potential bottlenecks in the implementation when processing larger datasets. Throughput decreases by approximately 68% as dataset size increases from 5 to 50 documents, suggesting areas for optimization in handling larger workloads.
+
+This performance characterization provides a baseline for future optimizations and allows for informed decisions about deployment constraints and capacity planning. The MapReduce implementation shows good performance for small to medium datasets but would benefit from optimization for larger data processing tasks.

@@ -26,8 +26,8 @@
     "yargs": "^17.7.2"
   },
   "report": {
-    "hours": 45,
-    "loc": 500,
+    "hours": 300,
+    "loc": 2500,
     "dev": {
       "cpu-no": 11,
       "mem-gb": 7,
@@ -92,7 +92,12 @@
           "M2": {
             "req": 1.52
           }
-        }
+        },
+        {"M5": {
+            "latency": 127,
+            "doc_throughput": 39.37,
+            "word_throughput": 755.91
+        }}
       ]
     },
     "dloc": 30000

@@ -63,13 +63,8 @@ function put(state, configuration, callback) {
   const filePath = path.join(groupDir, sanitizeKey(key) + '.json');
 
   let value = JSON.stringify(util.serialize(state));
-
-  fs.writeFile(filePath, value, (err) => {
-    if (err) return callback(err, null);
-    // Return the original object for pointer equality or referencing
-    // console.log(`Put ${key}, ${state} on node ${global.nodeConfig.port}`)
-    return callback(null, state);
-  });
+  fs.writeFileSync(filePath, value); // Use writeFileSync for atomic writes
+  callback(null, state); // Return the state back to the callback for confirmation
 }
 
 function get(configuration, callback) {
@@ -197,7 +192,7 @@ function del(configuration, callback) {
 }
 
 function append(state, configuration, callback) {
-  console.log("Appending state:", state, "with configuration:", configuration, "on node:", global.nodeConfig.port);
+  // console.log("Appending state:", state, "with configuration:", configuration, "on node:", global.nodeConfig.port);
   
   // If no state is given, error out
   if (!state) {
@@ -234,7 +229,7 @@ function append(state, configuration, callback) {
       const parsed = JSON.parse(data);
       const existingData = util.deserialize(parsed);
       
-      console.log("Existing data found for key:", key, "with data:", existingData);
+      // console.log("Existing data found for key:", key, "with data:", existingData);
       
       // Create deep copy of existing data
       const result = JSON.parse(JSON.stringify(existingData));
@@ -253,23 +248,31 @@ function append(state, configuration, callback) {
         }
       });
       
-      console.log("Final merged result:", result);
+      // console.log("Final merged result:", result);
       
       // Serialize without double encoding
       const serialized = util.serialize(result);
       
       // Write atomically
-      fs.writeFileSync(filePath, JSON.stringify(serialized));
+      fs.writeFileSync(filePath,JSON.stringify(serialized));
       
       callback(null, result);
     } catch (error) {
-      console.log(`${nodeConfig.port}: Error processing existing data:`, error.message);
-      // If we can't process the existing file, just create a new entry
-      put(state, configuration, callback);
-    }
+      // console.log(`${nodeConfig.port}: Error processing existing data:`, error.message);
+      // Instead of overwriting, try to salvage what we can
+      // Create an array with the new value
+      const result = {};
+      Object.keys(state).forEach(k => {
+        result[k] = [state[k]];
+      });
+      
+      const serialized = util.serialize(result);
+      fs.writeFileSync(filePath, JSON.stringify(serialized));
+      callback(null, result);
+      }
   } else {
     // If file doesn't exist, create a new one
-    console.log(`${nodeConfig.port}: No existing data found for key ${key}. Creating new entry.`);
+    // console.log(`${nodeConfig.port}: No existing data found for key ${key}. Creating new entry.`);
     put(state, configuration, callback);
   }
 }

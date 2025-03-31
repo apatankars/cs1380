@@ -82,7 +82,7 @@ function mr(config) {
       
       // Special case for SETUP - initiates the map phase on all nodes
       if (config.phase === "SETUP") {
-        console.log(`Starting setup phase for all nodes`);
+        // console.log(`Starting setup phase for all nodes`);
         const remote = {
           service: config.jid,
           method: 'map',
@@ -94,7 +94,7 @@ function mr(config) {
         const message = [setupConfig];
         state_dict.phase = "MAP";
         state_dict.phase_count = 0;
-        console.log(`State dictionary updated to ${state_dict}`);
+        // console.log(`State dictionary updated to ${state_dict}`);
         distribution[context.gid].comm.send(message, remote, callback);
         return;
       }
@@ -131,7 +131,7 @@ function mr(config) {
           // If we've finished reducing, return the results
           if (state_dict.phase === "REDUCE") {
             distribution[context.gid].comm.send([config.jid], {service: 'routes', method: 'rem'}, (e, v) => {
-              console.log(`COMPLETING ORCHESTRATION (deregistered custom route ${config.jid})`)
+              // console.log(`COMPLETING ORCHESTRATION (deregistered custom route ${config.jid})`)
               cb(null, results);
               return;
             });
@@ -139,11 +139,11 @@ function mr(config) {
           
           // Otherwise, move to the next phase
           let new_phase = phase_map[state_dict.phase];
-          console.log(`Moving to phase: ${new_phase}`);
+          // console.log(`Moving to phase: ${new_phase}`);
           // Notify all nodes of the new phase
           state_dict.phase = new_phase;
           state_dict.phase_count = 0;
-          console.log(`Notifying all nodes of new phase: ${new_phase} for job: ${config.jid}`);
+          // console.log(`Notifying all nodes of new phase: ${new_phase} for job: ${config.jid}`);
 
           let endPoint = config.jid;
           let method = state_dict.phase.toLowerCase();
@@ -182,7 +182,7 @@ function mr(config) {
       // First we get the serivce object for this worker node
       distribution.local.routes.get(job_id, (err, service) => {
         if (err) {
-          console.log("ERROR ERROR ERROR ", err);
+          // console.log("ERROR ERROR ERROR ", err);
           callback(err, null);
           return;
         }
@@ -202,7 +202,7 @@ function mr(config) {
           let pendingOperations = localKeys.length;
 
           if (pendingOperations === 0) {
-            console.log(`${global.nodeConfig.port}: FINISHED MAPPING`)
+            // console.log(`${global.nodeConfig.port}: FINISHED MAPPING`)
             service.notify({phase: "MAP", status: "COMPLETED", gid: gid, jid: job_id}, callback);
           }
           
@@ -235,7 +235,7 @@ function mr(config) {
                       callback(err, null);
                       return;
                     }
-                    console.log(`${global.nodeConfig.port}: FINISHED MAPPING`)
+                    // console.log(`${global.nodeConfig.port}: FINISHED MAPPING`)
                     service.notify({phase: "MAP", status: "COMPLETED", gid: gid, jid: job_id}, callback);
                   })
                 }
@@ -261,11 +261,11 @@ function mr(config) {
       const gid = config.gid;
       const jid = config.jid;
 
-      console.log(`${global.nodeConfig.port}: Starting shuffle for ${jid}`)
+      // console.log(`${global.nodeConfig.port}: Starting shuffle for ${jid}`)
       // Get the service for this job
       distribution.local.routes.get(jid, (err, service) => {
         if (err) {
-          console.log(`${global.nodeConfig.port}: ERROR WITH GETTING THE EPHEMERAL SERVICE ${err}`)
+          // console.log(`${global.nodeConfig.port}: ERROR WITH GETTING THE EPHEMERAL SERVICE ${err}`)
           callback(err, null);
           return;
         }
@@ -280,7 +280,7 @@ function mr(config) {
 
           if (!mapResults || mapResults.length === 0) {
             // No results to shuffle
-            console.log(`${global.nodeConfig.port}: NO RESULTS FOUND FROM THE MAP PHASE MOVING TO REDUCE!`)
+            // console.log(`${global.nodeConfig.port}: NO RESULTS FOUND FROM THE MAP PHASE MOVING TO REDUCE!`)
             service.notify({phase: "SHUFFLE", status: "COMPLETED", gid: gid, jid: jid}, callback);
             return;
           }
@@ -290,7 +290,7 @@ function mr(config) {
           const entrySize = mapResults.length;
           let entriesProcessed = 0;
 
-          console.log(global.nodeConfig.port, ": FOUND MAP RESULTS",mapResults)
+          // console.log(global.nodeConfig.port, ": FOUND MAP RESULTS",mapResults)
           
           // Process each mapped result - each is expected to be an object with a single key-value pair
           mapResults.forEach((entry) => {
@@ -304,7 +304,7 @@ function mr(config) {
               jid: jid
             }
 
-            console.log(global.nodeConfig.port, ": SENDING JID, KEY, ENTRY TO APPEND" ,jid, key, entry)
+            // console.log(global.nodeConfig.port, ": SENDING JID, KEY, ENTRY TO APPEND" ,jid, key, entry)
 
             // We distribute the results across the nodes!
             distribution[gid].store.append(append_config, (err, res) => {
@@ -317,7 +317,7 @@ function mr(config) {
 
               // 
               if (entriesProcessed === entrySize) {
-                console.log("Shuffling for node: ", global.nodeConfig, ' finished!');
+                // console.log("Shuffling for node: ", global.nodeConfig, ' finished!');
                 service.notify({phase: "SHUFFLE", status: "COMPLETED", gid: gid, jid: jid}, callback);
               }
             });
@@ -346,7 +346,7 @@ function mr(config) {
           return;
         }
 
-        console.log("Reducing for node: ", global.nodeConfig.port, ' started!');
+        // console.log("Reducing for node: ", global.nodeConfig.port, ' started!');
 
         const reducer = service.reducer;
         
@@ -354,7 +354,7 @@ function mr(config) {
         // Get all keys from the store to find our reduce buckets
         distribution.local.store.get({gid: gid, key: shuffleResultName}, (err, shuffleResults) => {
           if (err) {
-            console.log(global.nodeConfig.port, "COMPLETED")
+            // console.log(global.nodeConfig.port, "COMPLETED")
             service.notify({phase: "REDUCE", status: "COMPLETED", results: [], gid: gid, jid: job_id}, callback);
             callback(err, null);
             return;
@@ -362,7 +362,7 @@ function mr(config) {
 
           let reduceKeys = Object.keys(shuffleResults)
 
-          console.log(global.nodeConfig.port, " : found", reduceKeys.length ,"reduced results :", shuffleResults);
+          // console.log(global.nodeConfig.port, " : found", reduceKeys.length ,"reduced results :", shuffleResults);
           
           if (reduceKeys.length === 0) {
             // No keys to process on this node, but still notify completion
@@ -383,7 +383,7 @@ function mr(config) {
             // Extract the actual key from the full key (remove the prefix)
             let values = shuffleResults[key]
 
-            console.log(global.nodeConfig.port, " : processing key ", key, " with values: ", values);
+            // console.log(global.nodeConfig.port, " : processing key ", key, " with values: ", values);
 
             if (!Array.isArray(values)) {
               values = [values]
@@ -395,7 +395,7 @@ function mr(config) {
             try {
               // Apply the reducer function
               let res = reducer(key, values);
-              console.log(global.nodeConfig.port, " : reducer produced ", res)
+              // console.log(global.nodeConfig.port, " : reducer produced ", res)
               
               // Add result to our collection
               reduceResults.push(res);
@@ -405,8 +405,8 @@ function mr(config) {
               
               // If all operations are done, notify completion with results
               if (pendingOperations === 0) {
-                console.log("Reducing for node: ", global.nodeConfig.port, ' finished!');
-                console.log( global.nodeConfig.port, " : Final reduce results: ", reduceResults);
+                // console.log("Reducing for node: ", global.nodeConfig.port, ' finished!');
+                // console.log( global.nodeConfig.port, " : Final reduce results: ", reduceResults);
                 service.notify({
                   phase: "REDUCE", 
                   status: "COMPLETED", 
@@ -442,7 +442,7 @@ function mr(config) {
     };
     
     // Register the service on all nodes in the group
-    console.log("EXEC STARTS", global.nodeConfig, 'with keys', keys);
+    // console.log("EXEC STARTS", global.nodeConfig, 'with keys', keys);
     distribution[context.gid].routes.put(mrServiceObject, mrServiceName, (err, res) => {
       if (err) {
         cb(err, null);

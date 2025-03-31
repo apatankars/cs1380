@@ -130,7 +130,7 @@ test('(20 pts) all.mr:avgwrdl', (done) => {
 });
 
 test('(25 pts) all.mr:cfreq', (done) => {
-  // Calculate the frequency of each character in a set of documents
+  // Calculate the 
   const mapper = (key, value) => {
     const chars = value.replace(/\s+/g, '').split('');
     const out = [];
