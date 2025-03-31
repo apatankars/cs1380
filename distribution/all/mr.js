@@ -304,7 +304,7 @@ function mr(config) {
               jid: jid
             }
 
-            console.log(global.nodeConfig.port, jid, key, entry)
+            // console.log(global.nodeConfig.port, jid, key, entry)
 
             // We distribute the results across the nodes!
             distribution[gid].store.append(append_config, (err, res) => {
@@ -362,7 +362,7 @@ function mr(config) {
 
           let reduceKeys = Object.keys(shuffleResults)
 
-          console.log(global.nodeConfig.port, " : found", reduceKeys.length ,"reduced results :", shuffleResults);
+          // console.log(global.nodeConfig.port, " : found", reduceKeys.length ,"reduced results :", shuffleResults);
           
           if (reduceKeys.length === 0) {
             // No keys to process on this node, but still notify completion
@@ -392,7 +392,7 @@ function mr(config) {
             try {
               // Apply the reducer function
               let res = reducer(key, values);
-              console.log(global.nodeConfig.port, " : reducer produced ", res)
+              // console.log(global.nodeConfig.port, " : reducer produced ", res)
               
               // Add result to our collection
               reduceResults.push(res);
