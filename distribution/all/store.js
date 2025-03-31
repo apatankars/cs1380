@@ -153,12 +153,16 @@ function store(config) {
         return;
       }
 
+      
+
       if (configuration.key === null) {
         configuration = id.getID(state);
       }
 
+      const key = Object.keys(configuration.entry)[0];
+
       // 3) Get the correct node
-      getChosenNode(configuration.key, (err, chosenNode) => {
+      getChosenNode(key, (err, chosenNode) => {
         if (err) return callback(new Error('Could not find a node'), null);
 
         // 6) Send the key to the chosen node
@@ -167,6 +171,8 @@ function store(config) {
           method: 'append',
           node: chosenNode
         };
+
+        console.log("SENDING APPEND MESSAGE TO NODE:", chosenNode.port, "with configuration:", configuration);
 
         const messageConfig = {
           key: "reduce@" + configuration.jid,

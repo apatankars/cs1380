@@ -290,7 +290,7 @@ function mr(config) {
           const entrySize = mapResults.length;
           let entriesProcessed = 0;
 
-          console.log("Found: ", global.nodeConfig.port, mapResults)
+          console.log(global.nodeConfig.port, ": FOUND MAP RESULTS",mapResults)
           
           // Process each mapped result - each is expected to be an object with a single key-value pair
           mapResults.forEach((entry) => {
@@ -304,7 +304,7 @@ function mr(config) {
               jid: jid
             }
 
-            // console.log(global.nodeConfig.port, jid, key, entry)
+            console.log(global.nodeConfig.port, ": SENDING JID, KEY, ENTRY TO APPEND" ,jid, key, entry)
 
             // We distribute the results across the nodes!
             distribution[gid].store.append(append_config, (err, res) => {
@@ -362,7 +362,7 @@ function mr(config) {
 
           let reduceKeys = Object.keys(shuffleResults)
 
-          // console.log(global.nodeConfig.port, " : found", reduceKeys.length ,"reduced results :", shuffleResults);
+          console.log(global.nodeConfig.port, " : found", reduceKeys.length ,"reduced results :", shuffleResults);
           
           if (reduceKeys.length === 0) {
             // No keys to process on this node, but still notify completion
@@ -377,10 +377,13 @@ function mr(config) {
           // Flag to track if an error has occurred
           let hasError = false;
 
+          
           // Process each reduce key
           reduceKeys.forEach((key) => {
             // Extract the actual key from the full key (remove the prefix)
             let values = shuffleResults[key]
+
+            console.log(global.nodeConfig.port, " : processing key ", key, " with values: ", values);
 
             if (!Array.isArray(values)) {
               values = [values]
@@ -392,7 +395,7 @@ function mr(config) {
             try {
               // Apply the reducer function
               let res = reducer(key, values);
-              // console.log(global.nodeConfig.port, " : reducer produced ", res)
+              console.log(global.nodeConfig.port, " : reducer produced ", res)
               
               // Add result to our collection
               reduceResults.push(res);
@@ -402,7 +405,8 @@ function mr(config) {
               
               // If all operations are done, notify completion with results
               if (pendingOperations === 0) {
-                console.log("Reducing for node: ", global.nodeConfig, ' finished!');
+                console.log("Reducing for node: ", global.nodeConfig.port, ' finished!');
+                console.log( global.nodeConfig.port, " : Final reduce results: ", reduceResults);
                 service.notify({
                   phase: "REDUCE", 
                   status: "COMPLETED", 

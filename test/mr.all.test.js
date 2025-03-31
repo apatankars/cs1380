@@ -14,7 +14,7 @@ const n1 = {ip: '127.0.0.1', port: 7110};
 const n2 = {ip: '127.0.0.1', port: 7111};
 const n3 = {ip: '127.0.0.1', port: 7112};
 
-test.only('(20 pts) all.mr:ncdc', (done) => {
+test('(20 pts) all.mr:ncdc', (done) => {
   const mapper = (key, value) => {
     
     const words = value.split(/(\s+)/).filter((e) => e !== ' ');
@@ -82,13 +82,13 @@ test('(20 pts) all.mr:avgwrdl', (done) => {
   };
 
   const reducer = (key, values) => {
-    console.log("Reducer input : key", key, " and value: ", values)
+    // console.log("Reducer input : key", key, " and value: ", values)
     const totalLength = values.reduce((sum, v) => sum + v.totalLength, 0);
     const totalCount = values.reduce((sum, v) => sum + v.wordCount, 0);
     const avgLength = totalCount === 0 ? 0 : totalLength / totalCount;
     const out = {};
     out[key] = parseFloat(avgLength.toFixed(2));
-    console.log("Reducer output : ", out)
+    // console.log("Reducer output : ", out)
     return out;
   };
 

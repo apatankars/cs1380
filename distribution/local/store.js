@@ -62,9 +62,7 @@ function put(state, configuration, callback) {
 
   const filePath = path.join(groupDir, sanitizeKey(key) + '.json');
 
-  let serialized = util.serialize(state);
-
-  let value = JSON.stringify(serialized);
+  let value = JSON.stringify(util.serialize(state));
 
   fs.writeFile(filePath, value, (err) => {
     if (err) return callback(err, null);
@@ -200,104 +198,78 @@ function del(configuration, callback) {
 
 function append(state, configuration, callback) {
   console.log("Appending state:", state, "with configuration:", configuration, "on node:", global.nodeConfig.port);
-  let nodeConfig = global.nodeConfig;
-  let nodeID = util.id.getNID(nodeConfig);
-  let key;
-  let gid = 'local';
   
   // If no state is given, error out
   if (!state) {
     return callback(new Error('No state to append'), null);
   }
   
-  // Parse configuration to get key and gid
-  if (configuration === null || configuration === undefined) {
-    key = util.id.getID(state);
-  } else if (typeof configuration === 'object') {
-    if (configuration.key) {
-      key = configuration.key;
-    }
-    if (configuration.gid) {
-      gid = configuration.gid;
-    }
-    if (!key) {
-      key = util.id.getID(state);
-    }
+  // Parse the configuration to extract key and gid
+  let nodeConfig = global.nodeConfig;
+  let nodeID = util.id.getNID(nodeConfig);
+  let key, gid = 'local';
+  
+  if (typeof configuration === 'object') {
+    if (configuration.key) key = configuration.key;
+    if (configuration.gid) gid = configuration.gid;
   } else if (typeof configuration === 'string') {
     key = configuration;
   } else {
     key = util.id.getID(state);
   }
-
-  console.log(`${nodeConfig.port}: Appending to key ${key} in group ${gid}`);
   
-  // Build directory path
+  // Create directory if needed
   const groupDir = path.join('store', nodeID, gid);
   fs.mkdirSync(groupDir, { recursive: true });
   
   const filePath = path.join(groupDir, sanitizeKey(key) + '.json');
-
-  // Ensure state is an object
-  const stateObj = typeof state === 'object' && state !== null ? state : { value: state };
   
   // Check if file exists
   if (fs.existsSync(filePath)) {
-    // Read existing data
-    fs.readFile(filePath, 'utf8', (err, data) => {
-      if (err) return callback(err, null);
+    try {
+      // Read file directly (don't use get to avoid double deserialization)
+      const data = fs.readFileSync(filePath, 'utf8');
       
-      let existingData;
-      try {
-        const parsedData = JSON.parse(data);
-        existingData = util.deserialize(parsedData);
-
-        console.log("Existing data found for key:", key, "on node:", global.nodeConfig.port, "with data:", existingData);
-        
-        // Ensure existing data is an object we can work with
-        if (typeof existingData !== 'object' || existingData === null) {
-          existingData = { value: existingData };
-        }
-      } catch (e) {
-        return callback(new Error('Error parsing existing data: ' + e.message), null);
-      }
+      // Parse the stored JSON
+      const parsed = JSON.parse(data);
+      const existingData = util.deserialize(parsed);
       
-      // Create a deep copy to avoid modifying the original
-      let result = JSON.parse(JSON.stringify(existingData));
-      console.log("Merging existing data with new state:", stateObj, "on node:", global.nodeConfig.port);
-      console.log("Current result before merging:", result);
+      console.log("Existing data found for key:", key, "with data:", existingData);
       
-      // More careful merging logic
-      Object.keys(stateObj).forEach(key => {
-        if (!result.hasOwnProperty(key)) {
+      // Create deep copy of existing data
+      const result = JSON.parse(JSON.stringify(existingData));
+      
+      // Handle merging
+      Object.keys(state).forEach(k => {
+        if (!result.hasOwnProperty(k)) {
           // Key doesn't exist yet, add it
-          result[key] = [stateObj[key]];
-        } else if (!Array.isArray(result[key])) {
-          // Value exists but isn't an array, convert to array with both values
-          result[key] = [result[key], stateObj[key]];
+          result[k] = state[k];
+        } else if (!Array.isArray(result[k])) {
+          // Value exists but isn't an array, convert to array
+          result[k] = [result[k], state[k]];
         } else {
           // Already an array, append the new value
-          result[key].push(stateObj[key]);
+          result[k].push(state[k]);
         }
       });
-
-      console.log("Final merged result:", result, "on node:", global.nodeConfig.port);
       
-      // Serialize and save the updated result
+      console.log("Final merged result:", result);
+      
+      // Serialize without double encoding
       const serialized = util.serialize(result);
-      const value = JSON.stringify(serialized);
-
-      console.log("Saving updated data for key:", key, "on node:", global.nodeConfig.port);
-      console.log("Serialized value to save:", value);
       
-      fs.writeFile(filePath, value, (err) => {
-        if (err) return callback(err, null);
-        return callback(null, result);
-      });
-    });
+      // Write atomically
+      fs.writeFileSync(filePath, JSON.stringify(serialized));
+      
+      callback(null, result);
+    } catch (error) {
+      console.log(`${nodeConfig.port}: Error processing existing data:`, error.message);
+      // If we can't process the existing file, just create a new entry
+      put(state, configuration, callback);
+    }
   } else {
     // If file doesn't exist, create a new one
     console.log(`${nodeConfig.port}: No existing data found for key ${key}. Creating new entry.`);
-    console.log("Creating new entry with state:", state, "on node:", global.nodeConfig.port);
     put(state, configuration, callback);
   }
 }
