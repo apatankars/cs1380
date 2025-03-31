@@ -145,19 +145,20 @@ function store(config) {
       });
     },
 
-    append: (state, configuration, callback) => {
+    append: (configuration, callback) => {
       callback = callback || cb;
-      if (state === undefined || state === null ){
-        callback(new Error('State is required'), null);
+      
+      if (configuration === undefined || configuration === null ){
+        callback(new Error('Configuration is required'), null);
         return;
       }
 
-      if (configuration === null) {
+      if (configuration.key === null) {
         configuration = id.getID(state);
       }
 
       // 3) Get the correct node
-      getChosenNode(configuration, (err, chosenNode) => {
+      getChosenNode(configuration.key, (err, chosenNode) => {
         if (err) return callback(new Error('Could not find a node'), null);
 
         // 6) Send the key to the chosen node
@@ -168,11 +169,11 @@ function store(config) {
         };
 
         const messageConfig = {
-          key: configuration,
+          key: "reduce@" + configuration.jid,
           gid: context.gid
         }
 
-        const message = [state, messageConfig];
+        const message = [configuration.entry, messageConfig];
 
         local.comm.send(message, config, (err, val) => {
           if (err) {

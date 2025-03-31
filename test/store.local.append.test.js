@@ -36,18 +36,21 @@ test('(1 pts) local.store.append basic functionality', (done) => {
 test('(2 pts) local.store.append multiple times aggregates values', (done) => {
   const data1 = {score: 10};
   const data2 = {score: 20};
+  const data3 = {scape: 10};
   const key = 'aggregateAppend';
   
   distribution.local.store.append(data1, key, (e, v) => {
     distribution.local.store.append(data2, key, (e, v) => {
-      try {
-        expect(e).toBeFalsy();
-        expect(v).toHaveProperty('score');
-        expect(v.score).toEqual([10, 20]);
-        done();
-      } catch (error) {
-        done(error);
-      }
+      distribution.local.store.append(data3, key, (e, v) => {
+        try {
+          expect(e).toBeFalsy();
+          expect(v).toHaveProperty('score');
+          expect(v.score).toEqual([10, 20]);
+          done();
+        } catch (error) {
+          done(error);
+        }
+      })
     });
   });
 });

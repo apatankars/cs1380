@@ -82,6 +82,8 @@ function put(service, configuration, callback = cb) {
   global.routesTable[gid] = global.routesTable[gid] || {};
   global.routesTable[gid][configuration] = service;
 
+  // console.log(`Successfully added service ${configuration} to the ${gid} group`)
+  // console.log(global.routesTable)
   callback(null, `Successfully added service ${configuration} to the ${gid} group`);
 }
 

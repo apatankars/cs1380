@@ -14,21 +14,21 @@ const n1 = {ip: '127.0.0.1', port: 7110};
 const n2 = {ip: '127.0.0.1', port: 7111};
 const n3 = {ip: '127.0.0.1', port: 7112};
 
-test('(20 pts) all.mr:ncdc', (done) => {
+test.only('(20 pts) all.mr:ncdc', (done) => {
   const mapper = (key, value) => {
-    console.log('Mapper called with key: ' + key);
+    
     const words = value.split(/(\s+)/).filter((e) => e !== ' ');
     const out = {};
     out[words[1]] = parseInt(words[3]);
-    console.log('Mapper output: ' + JSON.stringify(out));
+
     return [out];
   };
 
   const reducer = (key, values) => {
-    console.log('Reducer called with key: ' + key);
+
     const out = {};
     out[key] = values.reduce((a, b) => Math.max(a, b), -Infinity);
-    console.log('Reducer output: ' + JSON.stringify(out));
+    
     return out;
   };
 
@@ -69,7 +69,7 @@ test('(20 pts) all.mr:ncdc', (done) => {
 });
 
 
-test('(20 pts) all.mr:avgwrdl', (done) => {
+test.only('(20 pts) all.mr:avgwrdl', (done) => {
   // Calculate the average word length for each document
   const mapper = (key, value) => {
     const words = value.split(/\s+/).filter((e) => e !== '');
@@ -82,11 +82,13 @@ test('(20 pts) all.mr:avgwrdl', (done) => {
   };
 
   const reducer = (key, values) => {
+    console.log("Reducer input : key", key, " and value: ", values)
     const totalLength = values.reduce((sum, v) => sum + v.totalLength, 0);
     const totalCount = values.reduce((sum, v) => sum + v.wordCount, 0);
     const avgLength = totalCount === 0 ? 0 : totalLength / totalCount;
     const out = {};
     out[key] = parseFloat(avgLength.toFixed(2));
+    console.log("Reducer output : ", out)
     return out;
   };
 
@@ -127,7 +129,7 @@ test('(20 pts) all.mr:avgwrdl', (done) => {
   });
 });
 
-test('(25 pts) all.mr:cfreq', (done) => {
+test.only('(25 pts) all.mr:cfreq', (done) => {
   // Calculate the frequency of each character in a set of documents
   const mapper = (key, value) => {
     const chars = value.replace(/\s+/g, '').split('');
@@ -213,7 +215,6 @@ beforeAll((done) => {
     distribution.local.status.spawn(n1, (e, v) => {
       distribution.local.status.spawn(n2, (e, v) => {
         distribution.local.status.spawn(n3, (e, v) => {
-          console.log('All nodes started');
           cb();
         });
       });

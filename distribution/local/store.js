@@ -69,6 +69,7 @@ function put(state, configuration, callback) {
   fs.writeFile(filePath, value, (err) => {
     if (err) return callback(err, null);
     // Return the original object for pointer equality or referencing
+    // console.log(`Put ${key}, ${state} on node ${global.nodeConfig.port}`)
     return callback(null, state);
   });
 }
@@ -79,10 +80,10 @@ function get(configuration, callback) {
   let key;
   let gid = 'local';
 
-  if (configuration === null) {
+  if (configuration.key === null) {
     // "List all keys in the group"
     // build the dir path, read the filenames, remove .json, etc.
-    const groupDir = path.join('store', nodeID, gid);
+    const groupDir = path.join('store', nodeID, configuration.gid);
     // If the directory doesn’t exist or is empty, return []
     if (!fs.existsSync(groupDir)) {
       return callback(null, []);
@@ -124,8 +125,10 @@ function get(configuration, callback) {
     try {
       let value = JSON.parse(data);
       const obj = util.deserialize(value);
+      // console.log(global.nodeConfig.port, "RETURNING VALUE FOR KEY", configuration.key,": ", obj)
       return callback(null, obj);
     } catch (e) {
+      // console.log(global.nodeConfig.port,"ERROR FOR KEY", configuration.key,": ", e)
       return callback(e, null);
     }
   });
@@ -134,6 +137,7 @@ function get(configuration, callback) {
 function getGroupKeys(gid, callback) {
   let nodeConfig = global.nodeConfig;
   let nodeID = util.id.getNID(nodeConfig);
+  console.log("IN HERE");
 
   const groupDir = path.join('store', nodeID, gid);
     // If the directory doesn’t exist or is empty, return []
@@ -143,6 +147,7 @@ function getGroupKeys(gid, callback) {
   const files = fs.readdirSync(groupDir); // e.g. [ 'jcarb.json', 'someKey.json' ]
   // remove the .json from each for "key" names
   const keys = files.map((f) => f.replace(/\.json$/, ''));
+  console.log("Found ", keys," for node: ", global.nodeConfig);
   return callback(null, keys);
 }
 
@@ -222,6 +227,8 @@ function append(state, configuration, callback) {
   } else {
     key = util.id.getID(state);
   }
+
+  // console.log(`Appending on node ${global.nodeConfig.port} for the key ${key}`)
   
   // Build full directory path: store/<NID>/<gid>
   const groupDir = path.join('store', nodeID, gid);
@@ -280,19 +287,7 @@ function append(state, configuration, callback) {
     });
   } else {
     // If file doesn't exist, create a new one with state keys initialized as arrays
-    let initialData = {};
-    
-    Object.keys(state).forEach(key => {
-      initialData[key] = [state[key]];
-    });
-    
-    const serialized = util.serialize(initialData);
-    const value = JSON.stringify(serialized);
-    
-    fs.writeFile(filePath, value, (err) => {
-      if (err) return callback(err, null);
-      return callback(null, initialData);
-    });
+    put(state, configuration, callback);
   }
 }
 
