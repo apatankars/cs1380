@@ -118,10 +118,10 @@ function get(configuration, callback) {
     try {
       let value = JSON.parse(data);
       const obj = util.deserialize(value);
-      // console.log(global.nodeConfig.port, "RETURNING VALUE FOR KEY", configuration.key,": ", obj)
+      console.log(global.nodeConfig.port, "RETURNING VALUE FOR KEY", configuration.key,": ", obj);
       return callback(null, obj);
     } catch (e) {
-      // console.log(global.nodeConfig.port,"ERROR FOR KEY", configuration.key,": ", e)
+      console.log(global.nodeConfig.port,"ERROR FOR KEY", configuration.key,": ", e)
       return callback(e, null);
     }
   });
@@ -192,7 +192,7 @@ function del(configuration, callback) {
 }
 
 function append(state, configuration, callback) {
-  // console.log("Appending state:", state, "with configuration:", configuration, "on node:", global.nodeConfig.port);
+  console.log("Appending state:", state, "with configuration:", configuration, "on node:", global.nodeConfig.port);
   
   // If no state is given, error out
   if (!state) {

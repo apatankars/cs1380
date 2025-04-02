@@ -199,7 +199,7 @@ function mr(config) {
             return;
           }
 
-          let pendingOperations = localKeys.length;
+          let pendingOperations = localKeys.length - 1;
 
           if (pendingOperations === 0) {
             // console.log(`${global.nodeConfig.port}: FINISHED MAPPING`)
@@ -213,11 +213,13 @@ function mr(config) {
                 return;
               }
               // console.log(global.nodeConfig, err, val);
+              // console.log(`${global.nodeConfig.port}: Processing key ${key} for job ${job_id}`);
 
               try{
                 let res = mapper(key, val) // apply the map
 
                 // console.log(res)
+                // console.log(`${global.nodeConfig.port}: Mapper returned ${JSON.stringify(res)} for key ${key} in job ${job_id}`);
 
                 if (!Array.isArray(res)) {
                   res = [res];
@@ -226,9 +228,11 @@ function mr(config) {
                 mapResults = mapResults.concat(res);
 
                 pendingOperations--;
+                
 
                 if (pendingOperations === 0) {
                   // console.log("MADE IT")
+                  console.log(`${global.nodeConfig.port}: Finished mapping for job ${job_id} with ${mapResults.length} results`);
                   const mapResultName = "map@" + job_id;
                   distribution.local.store.put(mapResults, {key: mapResultName, gid: gid}, (err, val) => {
                     if (err) {
@@ -273,10 +277,11 @@ function mr(config) {
         // Get the map results from the local store
         const mapResultName = "map@" + jid;
         distribution.local.store.get({key: mapResultName, gid: gid}, (err, mapResults) => {
-          if (err) {
-            service.notify({phase: "SHUFFLE", status: "COMPLETED", gid: gid, jid: jid}, callback);
-            return;
-          }
+          // if (!err) {
+          //   console.log(`${global.nodeConfig.port}: ERROR GETTING MAP RESULTS ${err}`)
+          //   service.notify({phase: "SHUFFLE", status: "COMPLETED", gid: gid, jid: jid}, callback);
+          //   return;
+          // }
 
           if (!mapResults || mapResults.length === 0) {
             // No results to shuffle
@@ -290,7 +295,7 @@ function mr(config) {
           const entrySize = mapResults.length;
           let entriesProcessed = 0;
 
-          // console.log(global.nodeConfig.port, ": FOUND MAP RESULTS",mapResults)
+          console.log(global.nodeConfig.port, ": FOUND MAP RESULTS",mapResults)
           
           // Process each mapped result - each is expected to be an object with a single key-value pair
           mapResults.forEach((entry) => {
@@ -442,7 +447,7 @@ function mr(config) {
     };
     
     // Register the service on all nodes in the group
-    // console.log("EXEC STARTS", global.nodeConfig, 'with keys', keys);
+    console.log("EXEC STARTS", global.nodeConfig, 'with keys', keys);
     distribution[context.gid].routes.put(mrServiceObject, mrServiceName, (err, res) => {
       if (err) {
         cb(err, null);

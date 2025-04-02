@@ -129,7 +129,10 @@ function deserialize(string, seen = new Map()) {
   throw new Error(`Unknown type: ${json.type}`);
 }
 
+const solSerialize = require('@brown-ds/distribution/distribution/util/serialization').serialize;
+const solDeserialize = require('@brown-ds/distribution/distribution/util/serialization').deserialize;
+
 module.exports = {
-  serialize: serialize,
-  deserialize: deserialize,
+  serialize: solSerialize,
+  deserialize: solDeserialize,
 };

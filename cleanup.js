@@ -1,13 +1,12 @@
-const { node } = require('@brown-ds/distribution');
-const distribution = require('./distribution');
+// const { node } = require("@brown-ds/distribution");
+const distribution = require("./config.js");
 
-const n1 = {ip: '127.0.0.1', port: 7110};
-const n2 = {ip: '127.0.0.1', port: 7111};
-const n3 = {ip: '127.0.0.1', port: 7112};
+const n1 = { ip: "127.0.0.1", port: 7110 };
+// const n2 = { ip: "127.0.0.1", port: 7111 };
+// const n3 = { ip: "127.0.0.1", port: 7112 };
 // const n3 = {ip: '172.31.3.4', port: 9003};
 // const n4 = {ip: '127.0.0.1', port: 1234};
 // const n5 = {ip: '127.0.0.1', port: 9001};
-
 
 // let nodeList = [n1, n2, n3, n4, n5];
 
@@ -25,14 +24,14 @@ const n3 = {ip: '127.0.0.1', port: 7112};
 // let spawnNode = nodeList[index - 1];
 // console.log(spawnNode)
 
-const remote = {service: 'status', method: 'stop'};
+const remote = { service: "status", method: "stop" };
 remote.node = n1;
 distribution.local.comm.send([], remote, (e, v) => {
-    remote.node = n2;
-    distribution.local.comm.send([], remote, (e, v) => {
-        remote.node = n3;
-            distribution.local.comm.send([], remote, (e, v) => {
-                process.exit(0);
-        })
-    });
+  //   remote.node = n2;
+  //   distribution.local.comm.send([], remote, (e, v) => {
+  //     remote.node = n3;
+  //     distribution.local.comm.send([], remote, (e, v) => {
+  process.exit(0);
+  //     });
+  //   });
 });
