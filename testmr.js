@@ -57,13 +57,10 @@ function mr(config) {
     // const SHUFFLE_BATCH_SIZE = 50; // Number of items to shuffle at once
 
     let results = [];
-    const resultKey = mrServiceName + "@results"; // Use the job ID to identify the reduce results
 
     let state_dict = {
       phase: "MAP",
       phase_count: 0,
-      batch_num: 0, // Used to track the number of batch for the MapReduce job
-      num_batches: Math.ceil(keys.length / (configuration.batch_size || 50)), // Total number of batches for the map phase
     };
     /**
      * This is the notify service method which is called by each worker node whenever they are done with
@@ -90,7 +87,24 @@ function mr(config) {
         return;
       } 
       
-      
+      // Special case for SETUP - initiates the map phase on all nodes
+      if (config.phase === "SETUP") {
+        // console.log(`Starting setup phase for all nodes`);
+        const remote = {
+          service: config.jid,
+          method: 'map',
+        }
+        const setupConfig = {
+          gid: config.gid,
+          jid: config.jid
+        }
+        const message = [setupConfig];
+        state_dict.phase = "MAP";
+        state_dict.phase_count = 0;
+        // console.log(`State dictionary updated to ${state_dict}`);
+        distribution[context.gid].comm.send(message, remote, callback);
+        return;
+      }
       // Otherwise we get the local group node count by making a call to the group
       distribution.local.groups.get(config.gid, (err, group) => {
         if (err) {
@@ -116,9 +130,7 @@ function mr(config) {
         if (state_dict.phase === "REDUCE") {
           if (config.results) {
             // console.log(`Node ${global.nodeConfig.port}: Collecting reduce results:`, config.results);
-            
-            // results = results.concat(config.results);
-            distribution.local.store.append(config.results, {key: resultKey, gid: context.gid}, callback);
+            results = results.concat(config.results);
           }
         }
 
@@ -128,9 +140,9 @@ function mr(config) {
         );
         if (state_dict.phase_count === groupNodeCount) {
           // If we've finished reducing, return the results
-          if (state_dict.batch_num === state_dict.numBatches && state_dict.phase === "REDUCE") {
+          if (state_dict.phase === "REDUCE") {
             distribution[context.gid].comm.send([config.jid], {service: 'routes', method: 'rem'}, (e, v) => {
-              // console.log(`COMPLETING ORCHESTRATION (${config.jid})`)
+              // console.log(`COMPLETING ORCHESTRATION (deregistered custom route ${config.jid})`)
               cb(null, results);
               return;
             });
@@ -138,6 +150,7 @@ function mr(config) {
           
           // Otherwise, move to the next phase
           let new_phase = phase_map[state_dict.phase];
+          // console.log(`Moving to phase: ${new_phase}`);
           // Notify all nodes of the new phase
           state_dict.phase = new_phase;
           state_dict.phase_count = 0;
@@ -170,15 +183,12 @@ function mr(config) {
      *    mapper: this is the serialized version of the user provided mapper
      *    gid: this is the groupID 
      *    jid: this is the jobID (mr@<uuid>)
-     *    batch_num: this is the batch number for the map phase (optional, used for batching)
-     *    batch_size: this is the size of each batch (optional, defaults to 100)
      * @param {*} cb 
      */
     const map = (config, callback) => {
       const gid = config.gid;
       const job_id = config.jid;
-      const BATCH_SIZE = config.batch_size || 50; // Default batch size for processing, can be overridden by config
-      const batch_num = config.batch_num || 0; // Default to 1 if not provided, used for batching
+      const BATCH_SIZE = 100; 
 
       distribution.local.routes.get(job_id, (err, service) => {
         if (err) {
@@ -562,19 +572,28 @@ function mr(config) {
     
     // Register the service on all nodes in the group
     console.log("EXEC STARTS", global.nodeConfig, 'with keys', keys);
-// sole.log(global.nodeConfig.port, ": ", global.groupsTable);
+    console.log(global.nodeConfig.port, ": ", global.groupsTable);
     distribution[context.gid].routes.put(mrServiceObject, mrServiceName, (err, res) => {
       if (err) {
         cb(err, null);
         return;
       }
 
+      // console.log(global.nodeConfig.port, ": ", global.groupsTable);
+
+      // console.log(`Successfuly placed service object for group ${context.gid}`);
+      
+      // distribution.local.routes.get({gid: context.gid, service: mrServiceName}, (err, service) => {
+      //   console.log(`local service object: ${service}`)
+      //   service.notify({phase: "SETUP", status: "START", gid: gid, jid: mrServiceName}, (err, val) => {
+      //     cb(null, val);
+      //   });
+      // })
       const setupConfig = {
           gid: context.gid,
           jid: mrServiceName,
           keys: keys
         }
-        // TODO: what if map took in a batch index
       const message = [setupConfig];
       distribution[context.gid].comm.send(message, {gid: 'local', service: mrServiceName, method: 'map'}, (e, v) => {
 

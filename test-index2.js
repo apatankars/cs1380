@@ -1,12 +1,20 @@
 const distribution = require("./config.js");
-const LZ = require("lz-string");
+const id = distribution.util.id;
 const fs = require("fs");
 
 // Set up a single node for testing
 const node = { ip: "127.0.0.1", port: 7110 };
+const num_nodes = 2;
+const nids = [];
+const nodes = [];
 const testGroup = {};
 const testConfig = { gid: "tfidf" };
-testGroup[distribution.util.id.getSID(node)] = node;
+// testGroup[distribution.util.id.getSID(node)] = node;
+for(let i = 0; i < num_nodes; i++) {
+    nodes.push({ ip: '127.0.0.1', port: 7110 + i });
+    nids.push(id.getNID(nodes[i]));
+    testGroup[id.getSID(nodes[i])] = nodes[i];
+}
 
 // Main function to run the TF-IDF calculation
 distribution.node.start(async (server) => {
@@ -35,7 +43,17 @@ distribution.node.start(async (server) => {
     );
 
   // Start the node
-  await spawn_node(node);
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
+    try {
+      await spawn_node(node);
+      console.log(`Node started at ${node.ip}:${node.port}`);
+    } catch (e) {
+      console.error(`Failed to start node at ${node.ip}:${node.port}`, e);
+      finish();
+      return;
+    }
+  }
 
   // Set up the group
   distribution.local.groups.put(testConfig, testGroup, (e, v) => {
@@ -45,19 +63,19 @@ distribution.node.start(async (server) => {
       return;
     }
 
+    
+
+    distribution.tfidf.groups.put(testConfig, testGroup, (e, v) => {
+
     console.log("Group set up successfully, starting TF-IDF calculation...");
 
-    global.LZString = LZ;
+    // global.LZString = LZ;
 
     // Define the mapper function
     // This processes each document and emits word -> [doc, count] pairs
     const mapper = function (key, value) {
       try {
-        // console.log(
-        //   `Mapper processing key: ${key}, value: ${JSON.stringify(
-        //     value
-        //   ).substring(0, 100)}...`
-        // );
+        
         const docData = value;
         const docId = docData.url;
         const words = docData.article_words || [];
@@ -75,6 +93,9 @@ distribution.node.start(async (server) => {
         return Object.entries(wordCounts).map(([word, count]) => {
           // console.log(
           //   `Mapper emitting word: ${word}, docId: ${docId}, count: ${count}`
+          // );
+          // console.log(
+          //   `Mapper processing word: ${word}, docId: ${docId}, count: ${count}`
           // );
           return { [word]: { docId, count, totalWords: words.length } };
         });
@@ -94,7 +115,7 @@ distribution.node.start(async (server) => {
       // );
       try {
         // Total number of documents
-        const totalDocs = values.length;
+        const totalDocs = values.length; // Use the actual number of documents in your dataset, or set it dynamically
 
         // Calculate term frequency for each document
         const docScores = values.map((value) => {
@@ -109,7 +130,7 @@ distribution.node.start(async (server) => {
 
         // Calculate inverse document frequency
         // IDF = log(Total number of documents / Number of documents containing the term)
-        const idf = Math.log(global.totalDocuments / totalDocs);
+        const idf = Math.log(14 / totalDocs);
 
         // Calculate TF-IDF for each document
         const tfidfScores = docScores.map((doc) => {
@@ -123,6 +144,11 @@ distribution.node.start(async (server) => {
         });
 
         // Return word with its TF-IDF scores across documents
+        // console.log(
+        //   `Reducer returning word: ${word}, with TF-IDF scores: ${JSON.stringify(
+        //     tfidfScores
+        //   )}`
+        // );
         return {
           word: word,
           documentFrequency: totalDocs,
@@ -135,10 +161,6 @@ distribution.node.start(async (server) => {
     };
 
     console.log(distribution.util.id.getNID(node)); // Log the node ID for debugging
-
-    distribution.local.groups.get("tfidf", (err, group) => {
-      console.log(`Retrieved group: ${JSON.stringify(group)}`);
-    });
 
     // First, count the total number of documents
     let messageConfig = {
@@ -153,14 +175,6 @@ distribution.node.start(async (server) => {
       },
     ];
     distribution.local.comm.send(message, messageConfig, (err, keys) => {
-      //   s
-      // });
-      // distribution.local.store.get({ gid: "tfidf", key: null }, (err, keys) => {
-      //   if (err) {
-      //     console.error("Error getting document keys:", err);
-      //     finish();
-      //     return;
-      //   }
 
       // Set total documents count as a global variable for use in reducer
       global.totalDocuments = keys.length;
@@ -187,11 +201,28 @@ distribution.node.start(async (server) => {
           return;
         }
 
-        console.log(
-          `MapReduce job completed. Processed ${results.length} unique terms.`
-        );
+        // After calculating results but before saving them
+        console.log(`MapReduce job completed. Processing ${results.length} unique terms...`);
 
-        // Save results to a file for inspection
+        // 1. Add an "importance" score to each result
+        // This will be the sum of all TF-IDF scores across documents
+        results.forEach(result => {
+          if (!result.scores) {
+            result.importance = 0;
+            return;
+          }
+          
+          // Calculate total importance of this term across all documents
+          result.importance = result.scores.reduce((sum, score) => sum + score.tfidf, 0);
+          
+          // Alternative: calculate max importance (highest TF-IDF in any document)
+          // result.maxImportance = Math.max(...result.scores.map(score => score.tfidf));
+        });
+
+        // 2. Sort the results by importance (most important terms first)
+        results.sort((a, b) => b.importance - a.importance);
+
+        // 3. Save the sorted results
         const resultsDir = "./tfidf-results";
         if (!fs.existsSync(resultsDir)) {
           fs.mkdirSync(resultsDir, { recursive: true });
@@ -204,9 +235,10 @@ distribution.node.start(async (server) => {
 
         console.log(`Results saved to ${resultsDir}/tfidf-results.json`);
 
-        // Optionally, save top terms for each document for quick lookup
+        // Continue with your document index creation
         const docIndex = {};
 
+        // When creating document index, preserve the global sorting too
         results.forEach((result) => {
           if (!result.scores) return;
 
@@ -219,25 +251,39 @@ distribution.node.start(async (server) => {
               word: result.word,
               tfidf: score.tfidf,
               count: score.count,
+              globalImportance: result.importance, // Add this for reference
             });
           });
         });
 
-        // Sort terms by TF-IDF score for each document and keep top terms
+        // For each document, sort by TF-IDF score specific to that document
         Object.keys(docIndex).forEach((docId) => {
           docIndex[docId].sort((a, b) => b.tfidf - a.tfidf);
           // Keep only top 100 terms per document
           docIndex[docId] = docIndex[docId].slice(0, 100);
         });
 
+        // Save the enhanced document index
         fs.writeFileSync(
           `${resultsDir}/document-index.json`,
           JSON.stringify(docIndex, null, 2)
         );
 
-        console.log(
-          `Document index saved to ${resultsDir}/document-index.json`
+        console.log(`Document index saved to ${resultsDir}/document-index.json`);
+
+        // Optionally, create a global terms index of most important terms
+        const globalTermsIndex = results.slice(0, 1000).map(result => ({
+          word: result.word,
+          importance: result.importance,
+          documentFrequency: result.documentFrequency
+        }));
+
+        fs.writeFileSync(
+          `${resultsDir}/global-terms-index.json`,
+          JSON.stringify(globalTermsIndex, null, 2)
         );
+
+        console.log(`Global terms index saved to ${resultsDir}/global-terms-index.json`);
 
         finish();
       });
@@ -250,4 +296,5 @@ distribution.node.start(async (server) => {
     await stop_node(node);
     server.close();
   };
+  });
 });

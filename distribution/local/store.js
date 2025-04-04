@@ -115,15 +115,17 @@ function get(configuration, callback) {
   fs.readFile(filePath, 'utf8', (err, data) => {
     if (err) return callback(err, null);
 
-    try {
-      let value = JSON.parse(data);
+    let value = JSON.parse(data);
       const obj = util.deserialize(value);
-      console.log(global.nodeConfig.port, "RETURNING VALUE FOR KEY", configuration.key,": ", obj);
+      // console.log(global.nodeConfig.port, "RETURNING VALUE FOR KEY", configuration.key,": ", obj); // Log the deserialized object for debugging
       return callback(null, obj);
-    } catch (e) {
-      console.log(global.nodeConfig.port,"ERROR FOR KEY", configuration.key,": ", e)
-      return callback(e, null);
-    }
+
+    // try {
+      
+    // } catch (e) {
+    //   console.log(global.nodeConfig.port,"ERROR FOR KEY", configuration.key,": ", e)
+    //   return callback(e, null);
+    // }
   });
 }
 
@@ -192,7 +194,7 @@ function del(configuration, callback) {
 }
 
 function append(state, configuration, callback) {
-  console.log("Appending state:", state, "with configuration:", configuration, "on node:", global.nodeConfig.port);
+  // console.log("Appending state:", state, "with configuration:", configuration, "on node:", global.nodeConfig.port);
   
   // If no state is given, error out
   if (!state) {
@@ -238,7 +240,7 @@ function append(state, configuration, callback) {
       Object.keys(state).forEach(k => {
         if (!result.hasOwnProperty(k)) {
           // Key doesn't exist yet, add it
-          result[k] = state[k];
+          result[k] = [state[k]];
         } else if (!Array.isArray(result[k])) {
           // Value exists but isn't an array, convert to array
           result[k] = [result[k], state[k]];
@@ -277,4 +279,51 @@ function append(state, configuration, callback) {
   }
 }
 
-module.exports = {put, get, getGroupKeys, del, append};
+function bulk_append(data, callback) {
+  const entries = data.entries;
+  const jid = data.jid;
+  const gid = data.gid || 'local';
+  
+  const nodeConfig = global.nodeConfig;
+  const nodeID = util.id.getNID(nodeConfig);
+  const shuffleResultName = "reduce@" + jid;
+  const groupDir = path.join('store', nodeID, gid);
+  const filePath = path.join(groupDir, sanitizeKey(shuffleResultName) + '.json');
+  
+  // Create directory if needed
+  fs.mkdirSync(groupDir, { recursive: true });
+  
+  // Read existing data or create new object
+  let results = {};
+  if (fs.existsSync(filePath)) {
+    try {
+      const data = fs.readFileSync(filePath, 'utf8');
+      const parsed = JSON.parse(data);
+      results = util.deserialize(parsed);
+    } catch (error) {
+      console.error(`Error reading shuffle results: ${error.message}`);
+    }
+  }
+  
+  // Process all entries
+  entries.forEach(entry => {
+    const key = entry.key;
+    const value = entry.entry[key];
+    
+    if (!results[key]) {
+      results[key] = value;
+    } else if (Array.isArray(results[key])) {
+      results[key].push(value);
+    } else {
+      results[key] = [results[key], value];
+    }
+  });
+  
+  // Write results back to file
+  const serialized = util.serialize(results);
+  fs.writeFileSync(filePath, JSON.stringify(serialized));
+  callback(null, results);
+}
+
+
+module.exports = {put, get, getGroupKeys, del, append, bulk_append};

@@ -154,4 +154,38 @@ function del(configuration, callback) {
   return callback(null, val);
 };
 
-module.exports = {put, get, del};
+function bulk_append(data, callback) {
+  const entries = data.entries;
+  const jid = data.jid;
+  const gid = data.gid || 'local';
+  
+  const shuffleResultName = "reduce@" + jid;
+  
+  // Initialize memory structure if needed
+  if (!memory[gid]) {
+    memory[gid] = {};
+  }
+  
+  // Get existing results or create new
+  let results = memory[gid][shuffleResultName] || {};
+  
+  // Process all entries
+  entries.forEach(entry => {
+    const key = entry.key;
+    const value = entry.entry[key];
+    
+    if (!results[key]) {
+      results[key] = value;
+    } else if (Array.isArray(results[key])) {
+      results[key].push(value);
+    } else {
+      results[key] = [results[key], value];
+    }
+  });
+  
+  // Store updated results
+  memory[gid][shuffleResultName] = results;
+  callback(null, results);
+}
+
+module.exports = {put, get, del, bulk_append};
