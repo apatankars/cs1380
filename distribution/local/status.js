@@ -7,6 +7,10 @@ global.moreStatus = {
   sid: global.distribution.util.id.getSID(global.nodeConfig),
   nid: global.distribution.util.id.getNID(global.nodeConfig),
   counts: 0,
+  memory: {
+    heapTotal: process.memoryUsage().heapTotal,
+    heapUsed: process.memoryUsage().heapUsed
+  }
 };
 
 const cb = (e, v) => {
@@ -44,6 +48,13 @@ status.get = function(configuration, callback) {
       break;
     case 'heapUsed':
       callback(null, process.memoryUsage().heapUsed);
+      break;
+    case 'memory':
+      // Return the entire memory usage object
+      callback(null, {
+        heapTotal: process.memoryUsage().heapTotal,
+        heapUsed: process.memoryUsage().heapUsed
+      });
       break;
     default:
       callback(new Error(`Status property "${configuration}" not found`), null);

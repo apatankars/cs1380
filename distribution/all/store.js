@@ -1,4 +1,5 @@
 const local = distribution.local;
+const { node } = require("@brown-ds/distribution");
 const util = require("../util/util");
 const id = util.id;
 
@@ -41,8 +42,38 @@ function store(config) {
   return {
     get: (configuration, callback) => {
       callback = callback || cb;
-      if (configuration === undefined || configuration === null ){
+      if (configuration === undefined ){
         callback(new Error('Configuration is required'), null);
+        return;
+      }
+
+      // console.log('Getting  distribution store with configuration:', configuration, "on node:", node ? `${global.nodeConfig.ip}:${global.nodeConfig.port}` : 'local');
+
+      if (configuration.key === null) {
+        let keys = [];
+        const remoteConfig = {
+        service: 'store',
+        method: 'get',
+        }
+        distribution[context.gid].comm.send({gid: context.gid, key: null}, remoteConfig, (errMap, valMap) => {
+          // if (Object.apply(errMap).keys().length !== 0) {
+          //   console.error('Failed to get keys from the group:', errMap);
+          //   callback(errMap, null);
+          //   return;
+          // }
+          // console.log(`Successfully retrieved keys from the group for gid: ${context.gid}`, valMap);
+          for (const key in valMap) {
+            if (valMap.hasOwnProperty(key)) {
+              
+              let nodeKeys = valMap[key].filter(key => !key.includes('.DS_Store'));
+              // console.log(`Found keys for gid: ${context.gid} on node: ${key}, keys:`, nodeKeys);
+              keys = keys.concat(nodeKeys);
+            }
+          }
+          callback(null, keys);
+          // return;
+        }
+      );
         return;
       }
 

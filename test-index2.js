@@ -3,15 +3,15 @@ const id = distribution.util.id;
 const fs = require("fs");
 
 // Set up a single node for testing
-const node = { ip: "127.0.0.1", port: 7110 };
-const num_nodes = 2;
+const node = { ip: "127.0.0.1", port: 7112 };
+const num_nodes = 4;
 const nids = [];
 const nodes = [];
 const testGroup = {};
 const testConfig = { gid: "tfidf" };
 // testGroup[distribution.util.id.getSID(node)] = node;
 for(let i = 0; i < num_nodes; i++) {
-    nodes.push({ ip: '127.0.0.1', port: 7110 + i });
+    nodes.push({ ip: '127.0.0.1', port: 7112 + i });
     nids.push(id.getNID(nodes[i]));
     testGroup[id.getSID(nodes[i])] = nodes[i];
 }
@@ -25,7 +25,7 @@ distribution.node.start(async (server) => {
     new Promise((resolve, reject) =>
       distribution.local.status.spawn(node, (e, v) => {
         console.log(
-          `Spawned node at ${node.ip}:${node.port} with result:`,
+          `Spawned node at ${node.ip}:${node.port} ${distribution.util.id.getNID(node)} with result:`,
           e ? e : v
         );
         resolve(e, v);
@@ -75,28 +75,62 @@ distribution.node.start(async (server) => {
     // This processes each document and emits word -> [doc, count] pairs
     const mapper = function (key, value) {
       try {
-        
+        // Expanded stop list combining standard English stop words (inspired by NLTK)
+        // with additional HTML/wiki-specific tokens that are common in Wikipedia pages.
+        const stopList = [
+          // NLTK-inspired common English stop words:
+          "i", "me", "my", "myself", "we", "our", "ours", "ourselves",
+          "you", "your", "yours", "yourself", "yourselves",
+          "he", "him", "his", "himself", "she", "her", "hers", "herself",
+          "it", "its", "itself", "they", "them", "their", "theirs", "themselves",
+          "what", "which", "who", "whom", "this", "that", "these", "those",
+          "am", "is", "are", "was", "were", "be", "been", "being",
+          "have", "has", "had", "having", "do", "does", "did", "doing",
+          "a", "an", "the", "and", "but", "if", "or", "because", "as",
+          "until", "while", "of", "at", "by", "for", "with", "about",
+          "against", "between", "into", "through", "during", "before",
+          "after", "above", "below", "to", "from", "up", "down", "in",
+          "out", "on", "off", "over", "under", "again", "further", "then",
+          "once", "here", "there", "when", "where", "why", "how", "all",
+          "any", "both", "each", "few", "more", "most", "other", "some",
+          "such", "no", "nor", "not", "only", "own", "same", "so", "than",
+          "too", "very", "s", "t", "can", "will", "just", "don", "should",
+          "now",
+          // Additional HTML, Wiki, and domain-specific terms:
+          "doctype", "html", "head", "body", "parser", "output", "navbox",
+          "reflist", "css", "clientpref", "template", "wikipedia", "org", "url",
+          "wikidata", "wiki", "infobox", "toc", "citation", "references", "special",
+          "edit", "content", "class", "div", "span", "id", "style", "script",
+          "link", "meta", "nav", "footer", "header"
+        ];
+
         const docData = value;
         const docId = docData.url;
         const words = docData.article_words || [];
 
         // Count word occurrences in this document
         const wordCounts = {};
+
         words.forEach((word) => {
-          // Skip very short words and normalize to lowercase
+          // Skip words with 2 or fewer characters
           if (word.length <= 2) return;
+
+          // Normalize to lowercase for consistency
           const cleanWord = word.toLowerCase();
+
+          // Skip if the word is in the stop list
+          if (stopList.indexOf(cleanWord) !== -1) return;
+
+          // Filter out words containing any non-alphabetic characters 
+          // (this removes numbers, punctuation, and mixed tokens)
+          if (!/^[a-z]+$/.test(cleanWord)) return;
+
+          // Count the word occurrence
           wordCounts[cleanWord] = (wordCounts[cleanWord] || 0) + 1;
         });
 
-        // Emit each word with document ID and count
+        // Emit each word with document ID, count, and total number of words processed
         return Object.entries(wordCounts).map(([word, count]) => {
-          // console.log(
-          //   `Mapper emitting word: ${word}, docId: ${docId}, count: ${count}`
-          // );
-          // console.log(
-          //   `Mapper processing word: ${word}, docId: ${docId}, count: ${count}`
-          // );
           return { [word]: { docId, count, totalWords: words.length } };
         });
       } catch (err) {
@@ -129,17 +163,13 @@ distribution.node.start(async (server) => {
         });
 
         // Calculate inverse document frequency
-        // IDF = log(Total number of documents / Number of documents containing the term)
-        const idf = Math.log(14 / totalDocs);
 
         // Calculate TF-IDF for each document
-        const tfidfScores = docScores.map((doc) => {
+        const tfScores = docScores.map((doc) => {
           return {
             docId: doc.docId,
             tf: doc.tf,
             count: doc.count,
-            idf: idf,
-            tfidf: doc.tf * idf,
           };
         });
 
@@ -152,7 +182,7 @@ distribution.node.start(async (server) => {
         return {
           word: word,
           documentFrequency: totalDocs,
-          scores: tfidfScores,
+          scores: tfScores,
         };
       } catch (err) {
         console.error(`Error in reducer for ${word}:`, err);
@@ -160,21 +190,9 @@ distribution.node.start(async (server) => {
       }
     };
 
-    console.log(distribution.util.id.getNID(node)); // Log the node ID for debugging
-
-    // First, count the total number of documents
-    let messageConfig = {
-      service: "store",
-      method: "get",
-      node: node,
-    };
-    let message = [
-      {
-        gid: "tfidf", // Group ID where documents are stored
-        key: null, // Get all keys in the group
-      },
-    ];
-    distribution.local.comm.send(message, messageConfig, (err, keys) => {
+  
+    
+    distribution.tfidf.store.get({key: null}, (err, keys) => {
 
       // Set total documents count as a global variable for use in reducer
       global.totalDocuments = keys.length;
@@ -188,42 +206,147 @@ distribution.node.start(async (server) => {
       const mrConfig = {
         map: mapper,
         reduce: reducer,
-        keys: keys, // Use all document keys from the store
+        keys: keys,
+        enable_checkpoints: true, // Enable checkpoints
+        checkpoint_interval: 3,   // Save every 3 batches
+        batch_size: 10            // Match your existing batch size
+        // checkPointID: "ae39b11c"
       };
 
       //   console.log(`MapReduce job configuration: ${JSON.stringify(mrConfig)}`);
 
       // Execute the MapReduce job
-      distribution.tfidf.mr.exec(mrConfig, (err, results) => {
+      distribution.tfidf.mr.exec(mrConfig, (err, rawResults) => {
         if (err) {
           console.error("Error executing MapReduce job:", err);
           finish();
           return;
         }
 
-        // After calculating results but before saving them
-        console.log(`MapReduce job completed. Processing ${results.length} unique terms...`);
+        // console.log(`MapReduce job completed. Found ${rawResults.length} results before aggregation...`);
 
-        // 1. Add an "importance" score to each result
-        // This will be the sum of all TF-IDF scores across documents
-        results.forEach(result => {
-          if (!result.scores) {
-            result.importance = 0;
-            return;
+        console.log(`MapReduce job completed. Found ${rawResults.length} results before aggregation...`);
+
+        const resultsDir = "./tfidf-results"; // Directory to save results
+
+        // IMPROVED AGGREGATION FUNCTION
+        function improvedAggregateResults(rawResults) {
+          console.log("Properly aggregating duplicate terms...");
+          
+          // Create a map to store merged results by word
+          const mergedResultsMap = new Map();
+          const totalDocuments = 54825; // Use actual count from earlier
+          
+          // First pass: combine all entries for the same word
+          rawResults.forEach(result => {
+            if (!result.word) return;
+            
+            // Get or create entry for this word
+            if (!mergedResultsMap.has(result.word)) {
+              mergedResultsMap.set(result.word, {
+                word: result.word,
+                uniqueDocIds: new Set(), // Track unique document IDs
+                allScores: [] // Collect all score objects
+              });
+            }
+            
+            const wordEntry = mergedResultsMap.get(result.word);
+            
+            // Add all scores from this result
+            if (Array.isArray(result.scores)) {
+              result.scores.forEach(score => {
+                if (score.docId) {
+                  // Add this document ID to our unique set
+                  wordEntry.uniqueDocIds.add(score.docId);
+                  
+                  // Add this score to our collection
+                  wordEntry.allScores.push({...score});
+                }
+              });
+            }
+          });
+          
+          // Track debug metrics
+          let debugMetrics = {
+            totalTerms: mergedResultsMap.size,
+            totalScores: 0,
+            maxDocsForTerm: 0,
+            maxTerm: ""
+          };
+          
+          // Second pass: recalculate values based on combined data
+          const finalResults = [];
+          
+          for (const [word, wordEntry] of mergedResultsMap.entries()) {
+            // Get the correct document frequency (unique docs)
+            const documentFrequency = wordEntry.uniqueDocIds.size;
+            
+            // Track term with most docs
+            if (documentFrequency > debugMetrics.maxDocsForTerm) {
+              debugMetrics.maxDocsForTerm = documentFrequency;
+              debugMetrics.maxTerm = word;
+            }
+            
+            // Calculate new IDF value based on actual document frequency
+            const idf = Math.log(totalDocuments / documentFrequency);
+            
+            // Deduplicate scores by document ID
+            const uniqueScores = {};
+            
+            // Process all scores for this word
+            wordEntry.allScores.forEach(score => {
+              const docId = score.docId;
+              
+              // Update the IDF for all scores
+              score.idf = idf;
+              
+              // Recalculate TF-IDF with new IDF
+              score.tfidf = score.tf * idf;
+              
+              // Keep the highest TF-IDF score for each document ID
+              if (!uniqueScores[docId] || uniqueScores[docId].tfidf < score.tfidf) {
+                uniqueScores[docId] = score;
+              }
+            });
+            
+            const finalScores = Object.values(uniqueScores);
+            debugMetrics.totalScores += finalScores.length;
+            
+            // Create the final result object
+            const finalResult = {
+              word: word,
+              documentFrequency: documentFrequency,
+              scores: finalScores
+            };
+            
+            // Calculate importance as sum of TF-IDF values
+            finalResult.importance = finalResult.scores.reduce(
+              (sum, score) => sum + score.tfidf, 0
+            );
+            
+            finalResults.push(finalResult);
           }
           
-          // Calculate total importance of this term across all documents
-          result.importance = result.scores.reduce((sum, score) => sum + score.tfidf, 0);
+          console.log(`Aggregation complete. Debug metrics:
+          - Unique terms: ${debugMetrics.totalTerms}
+          - Total document scores: ${debugMetrics.totalScores}
+          - Most frequent term: "${debugMetrics.maxTerm}" (in ${debugMetrics.maxDocsForTerm} documents)`);
           
-          // Alternative: calculate max importance (highest TF-IDF in any document)
-          // result.maxImportance = Math.max(...result.scores.map(score => score.tfidf));
-        });
+          return finalResults;
+        }
+        
+        // Call the improved function instead of the original
+        const results = improvedAggregateResults(rawResults);
 
-        // 2. Sort the results by importance (most important terms first)
+        console.log(`Processing ${results.length} unique terms...`);
+
+        // 1. Sort the results by importance (most important terms first)
         results.sort((a, b) => b.importance - a.importance);
-
-        // 3. Save the sorted results
-        const resultsDir = "./tfidf-results";
+        
+        // Do NOT filter out any terms with zero importance
+        
+        // 2. Save the results
+        // const resultsDir = "./tfidf-results";
         if (!fs.existsSync(resultsDir)) {
           fs.mkdirSync(resultsDir, { recursive: true });
         }
@@ -238,9 +361,12 @@ distribution.node.start(async (server) => {
         // Continue with your document index creation
         const docIndex = {};
 
-        // When creating document index, preserve the global sorting too
+        // 3. When creating document index, preserve the global sorting
         results.forEach((result) => {
-          if (!result.scores) return;
+          if (!result.scores) {
+            console.warn(`Term "${result.word}" has no scores array`);
+            return;
+          }
 
           result.scores.forEach((score) => {
             if (!docIndex[score.docId]) {
@@ -249,21 +375,21 @@ distribution.node.start(async (server) => {
 
             docIndex[score.docId].push({
               word: result.word,
-              tfidf: score.tfidf,
-              count: score.count,
-              globalImportance: result.importance, // Add this for reference
+              tfidf: score.tfidf || 0,
+              count: score.count || 0,
+              globalImportance: result.importance || 0, // Use 0 as fallback instead of undefined
             });
           });
         });
 
-        // For each document, sort by TF-IDF score specific to that document
+        // 4. For each document, sort by TF-IDF score specific to that document
         Object.keys(docIndex).forEach((docId) => {
           docIndex[docId].sort((a, b) => b.tfidf - a.tfidf);
           // Keep only top 100 terms per document
           docIndex[docId] = docIndex[docId].slice(0, 100);
         });
 
-        // Save the enhanced document index
+        // 5. Save the enhanced document index
         fs.writeFileSync(
           `${resultsDir}/document-index.json`,
           JSON.stringify(docIndex, null, 2)
@@ -271,11 +397,11 @@ distribution.node.start(async (server) => {
 
         console.log(`Document index saved to ${resultsDir}/document-index.json`);
 
-        // Optionally, create a global terms index of most important terms
+        // 6. Create a global terms index of most important terms (keeping all terms)
         const globalTermsIndex = results.slice(0, 1000).map(result => ({
           word: result.word,
-          importance: result.importance,
-          documentFrequency: result.documentFrequency
+          importance: result.importance || 0, // Use 0 as fallback
+          documentFrequency: result.documentFrequency || 0 // Use 0 as fallback
         }));
 
         fs.writeFileSync(

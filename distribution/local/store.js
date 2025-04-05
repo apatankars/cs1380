@@ -63,8 +63,14 @@ function put(state, configuration, callback) {
   const filePath = path.join(groupDir, sanitizeKey(key) + '.json');
 
   let value = JSON.stringify(util.serialize(state));
-  fs.writeFileSync(filePath, value); // Use writeFileSync for atomic writes
-  callback(null, state); // Return the state back to the callback for confirmation
+
+  fs.writeFile(filePath, JSON.stringify(value), (err) => {
+    if (err) {
+      console.error(`Error writing file ${filePath}: ${err.message}`);
+      return callback(err, null);
+    }
+    callback(null, state);
+  });
 }
 
 function get(configuration, callback) {
@@ -73,17 +79,22 @@ function get(configuration, callback) {
   let key;
   let gid = 'local';
 
+  // console.log("Getting value for configuration:", configuration, "on node:", nodeID);
   if (configuration.key === null) {
     // "List all keys in the group"
     // build the dir path, read the filenames, remove .json, etc.
     const groupDir = path.join('store', nodeID, configuration.gid);
     // If the directory doesn’t exist or is empty, return []
+    // console.log("Listing keys in group directory:", groupDir);
     if (!fs.existsSync(groupDir)) {
+      // console.log("Group directory does not exist:", groupDir);
       return callback(null, []);
     }
     const files = fs.readdirSync(groupDir); // e.g. [ 'jcarb.json', 'someKey.json' ]
+    // console.log("Found files in group directory:", files);
     // remove the .json from each for "key" names
     const keys = files.map((f) => f.replace(/\.json$/, ''));
+    // console.log("Returning keys:", keys, "for node:", nodeID);
     return callback(null, keys);
   }
 
@@ -112,6 +123,7 @@ function get(configuration, callback) {
   }
 
   // read & deserialize
+  // console.log(`Reading file from path: ${filePath} for key: ${key} on node: ${nodeID} with stats: ${JSON.stringify(fs.statSync(filePath).size)}`);
   fs.readFile(filePath, 'utf8', (err, data) => {
     if (err) return callback(err, null);
 

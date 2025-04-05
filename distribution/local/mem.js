@@ -155,37 +155,88 @@ function del(configuration, callback) {
 };
 
 function bulk_append(data, callback) {
+  // Process entries in smaller chunks to reduce memory pressure
   const entries = data.entries;
   const jid = data.jid;
   const gid = data.gid || 'local';
-  
   const shuffleResultName = "reduce@" + jid;
   
-  // Initialize memory structure if needed
-  if (!memory[gid]) {
-    memory[gid] = {};
+  // Use smaller chunks and process asynchronously
+  const CHUNK_SIZE = 50; // Reduced chunk size
+  
+  // Process in chunks
+  function processChunk(startIdx) {
+    const endIdx = Math.min(startIdx + CHUNK_SIZE, entries.length);
+    const chunk = entries.slice(startIdx, endIdx);
+    
+    // Get existing results
+    if (!memory[gid]) memory[gid] = {};
+    let results = memory[gid][shuffleResultName] || {};
+    
+    // Process chunk
+    chunk.forEach(entry => {
+      const key = entry.key;
+      const value = entry.entry[key];
+      
+      if (!results[key]) {
+        results[key] = value;
+      } else if (Array.isArray(results[key])) {
+        // Optimize array growth by pushing directly
+        results[key].push(value);
+      } else {
+        results[key] = [results[key], value];
+      }
+    });
+    
+    // Store updated results
+    memory[gid][shuffleResultName] = results;
+    
+    // Process next chunk or finish
+    if (endIdx < entries.length) {
+      // Avoid stack overflow with setImmediate
+      setImmediate(() => processChunk(endIdx));
+    } else {
+      callback(null, { success: true, entriesProcessed: entries.length });
+      // Help garbage collection
+      results = null;
+      chunk.length = 0;
+    }
   }
   
-  // Get existing results or create new
-  let results = memory[gid][shuffleResultName] || {};
-  
-  // Process all entries
-  entries.forEach(entry => {
-    const key = entry.key;
-    const value = entry.entry[key];
-    
-    if (!results[key]) {
-      results[key] = value;
-    } else if (Array.isArray(results[key])) {
-      results[key].push(value);
-    } else {
-      results[key] = [results[key], value];
-    }
-  });
-  
-  // Store updated results
-  memory[gid][shuffleResultName] = results;
-  callback(null, results);
+  // Start processing
+  processChunk(0);
 }
 
-module.exports = {put, get, del, bulk_append};
+function clear(configuration, callback) {
+    callback = callback || cb;
+  let gid = 'local';
+
+  if (configuration === null) {
+    // Clear all memory for the local group
+    memory[gid] = {};
+    return callback(null, { success: true });
+  }
+
+  if (typeof configuration === 'object') {
+    if (configuration !== null) {
+      if (configuration.gid) {
+        gid = configuration.gid;
+      }
+    }
+  }
+
+  // Clear the specific group
+  if (memory[gid]) {
+    memory[gid] = {};
+    if (global.gc) {
+      global.gc();
+    } else {
+        console.warn('Garbage collection is not exposed. Use --expose-gc');
+    }
+    return callback(null, { success: true });
+  } else {
+    return callback(new Error('No memory found for gid: ' + gid));
+  }
+}
+
+module.exports = {put, get, del, bulk_append, clear};
