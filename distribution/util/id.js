@@ -43,14 +43,16 @@ function getMID(message) {
 }
 
 function idToNum(id) {
-  const n = parseInt(id, 16);
-  assert(!isNaN(n), 'idToNum: id is not in KID form!');
+  const n = BigInt("0x" + id);
+  // assert(!isNaN(n), "idToNum: id is not in KID form!");
   return n;
 }
 
 function naiveHash(kid, nids) {
   nids.sort();
-  return nids[idToNum(kid) % nids.length];
+
+  const index = idToNum(kid) % BigInt(nids.length);
+  return nids[Number(index)];
 }
 
 function consistentHash(kid, nids) {

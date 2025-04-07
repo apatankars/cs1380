@@ -509,7 +509,7 @@ Phase Statistics:
               
               // Hash the key to determine target node
               const kid = distribution.util.id.getID(key);
-              const targetNID = distribution.util.id.consistentHash(kid, nids);
+              const targetNID = distribution.util.id.naiveHash(kid, nids);
               const targetNode = nodeConfigs.find((nc) => distribution.util.id.getNID(nc) === targetNID);
               
               if (!targetNode) {

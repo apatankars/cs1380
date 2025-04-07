@@ -5,7 +5,7 @@ const id = util.id;
 function store(config) {
   const context = {};
   context.gid = config.gid || 'all';
-  context.hash = config.hash || global.distribution.util.id.consistentHash; // default to consistentHash if not provided
+  context.hash = config.hash || global.distribution.util.id.naiveHash; // default to consistentHash if not provided
 
   const cb = (error, value) => {
     if (error) {
@@ -14,7 +14,6 @@ function store(config) {
       console.log(value);
     }
   };
-
   function getChosenNode(configuration, callback) {
     distribution.local.groups.get(context.gid, (err, group) => {
         if (err) {
@@ -87,7 +86,7 @@ function store(config) {
 
         const message = [messageConfig];
 
-        console.log(`Sending get request to node: ${JSON.stringify(chosenNode)} with key: ${JSON.stringify(messageConfig)}`);
+        // console.log(`Sending get request to node: ${JSON.stringify(chosenNode)} with key: ${JSON.stringify(messageConfig)}`);
         local.comm.send(message, config, (err, val) => {
           if (err) {
             callback(err, null);

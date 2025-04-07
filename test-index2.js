@@ -1,40 +1,48 @@
 const distribution = require("./config.js");
 const id = distribution.util.id;
 const fs = require("fs");
-const os = require("os");
 const path = require("path");
 
 // Set up nodes for distributed processing
-const num_nodes = 4;
-const nodes = [];
+const num_nodes = 8;
+const nodes = [
+  { ip: "3.144.96.104", port: 1234 },
+  { ip: "3.21.106.86", port: 1234 },
+  { ip: "3.148.233.41", port: 1234 },
+  { ip: "13.59.147.228", port: 1234 },
+  { ip: "3.148.221.252", port: 1234 },
+  { ip: "3.137.162.13", port: 1234 },
+  { ip: "3.138.138.167", port: 1234 },
+  { ip: "18.189.188.238", port: 1234 },
+];
+
 const nids = [];
 const testGroup = {};
 const indexGroup = {};
 
 // Define separate groups for different data types
-const tfidfConfig = { gid: "tfidf" };  // For document data
-const indexConfig = { gid: "index" };  // For term data
+const tfidfConfig = { gid: "tfidf" }; // For document data
+const indexConfig = { gid: "index" }; // For term data
 
 function isEmptyObject(obj) {
-  return obj && typeof obj === 'object' && Object.keys(obj).length === 0;
+  return obj && typeof obj === "object" && Object.keys(obj).length === 0;
 }
 
-for(let i = 0; i < num_nodes; i++) {
-    const nodeConfig = { ip: '127.0.0.1', port: 7112 + i };
-    nodes.push(nodeConfig);
-    nids.push(id.getNID(nodeConfig));
-    
-    // Add node to both groups
-    const sid = id.getSID(nodeConfig);
-    testGroup[sid] = nodeConfig;
-    indexGroup[sid] = nodeConfig;
+for (let i = 0; i < num_nodes; i++) {
+  let nodeConfig = nodes[i];
+  nids.push(id.getNID(nodeConfig));
+
+  // Add node to both groups
+  const sid = id.getSID(nodeConfig);
+  testGroup[sid] = nodeConfig;
+  indexGroup[sid] = nodeConfig;
 }
 
 // Configuration
 const CONFIG = {
   // Processing config
-  BATCH_SIZE: 10,                  // Number of keys each node processes per batch
-  MAX_EMPTY_BATCHES: 4,            // Stop after this many consecutive empty batches
+  BATCH_SIZE: 16,                  // Number of keys each node processes per batch
+  MAX_EMPTY_BATCHES: 6,            // Stop after this many consecutive empty batches
   PROCESS_CHUNK_SIZE: 10000,       // Chunk size for processing terms
   SAVE_REFERENCE_COPY: true,       // Whether to save a reference copy of the full index
   
@@ -237,41 +245,6 @@ distribution.node.start(async (server) => {
   PERF.startTime = Date.now();
   console.log("SETTING UP OPTIMIZED TF-IDF TEST NODE...");
 
-  // Helper function to spawn a node
-  const spawn_node = (node) =>
-    new Promise((resolve, reject) =>
-      distribution.local.status.spawn(node, (e, v) => {
-        console.log(
-          `Spawned node at ${node.ip}:${node.port} ${distribution.util.id.getNID(node)} with result:`,
-          e ? e : v
-        );
-        resolve(e, v);
-      })
-    );
-
-  // Helper function to stop a node
-  const stop_node = (node) =>
-    new Promise((resolve, reject) =>
-      distribution.local.comm.send(
-        [],
-        { service: "status", method: "stop", node: node },
-        (e, v) => resolve(e, v)
-      )
-    );
-
-  // Start the nodes
-  for (let i = 0; i < nodes.length; i++) {
-    const node = nodes[i];
-    try {
-      await spawn_node(node);
-      console.log(`Node started at ${node.ip}:${node.port}`);
-    } catch (e) {
-      console.error(`Failed to start node at ${node.ip}:${node.port}`, e);
-      finish();
-      return;
-    }
-  }
-
   // Set up the TFIDF group
   distribution.local.groups.put(tfidfConfig, testGroup, (e, v) => {
     if (e && !isEmptyObject(e)) {
@@ -293,7 +266,7 @@ distribution.node.start(async (server) => {
       console.log("INDEX group set up successfully");
 
       // Set up the group in TFIDF service
-      console.log("Setting up TFIDF service group with the following configuration:", tfidfConfig, testGroup);
+      console.log("Setting up TFIDF service group with the following configuration:", tfidfConfig.gid);
       distribution.tfidf.groups.put(tfidfConfig, testGroup, (e, v) => {
         if (e && !isEmptyObject(e)) {
           console.error("Error setting up TFIDF service group:", e);
@@ -306,9 +279,37 @@ distribution.node.start(async (server) => {
         // Define the mapper function
         // This processes each document and emits word -> [doc, count] pairs
         const mapper = function (key, value) {
+          function parseArticleData(rawString) {
+            try {
+              // First parse the outer JSON structure
+              const outerObject = JSON.parse(rawString);
+
+              // console.log("Outer object:", outerObject);
+              if (outerObject.url) {
+                return outerObject;
+              }
+              
+              // Now parse the inner JSON string contained in the value property
+              if (outerObject && outerObject.type === 'string' &&outerObject.value) {
+                const innerObject = JSON.parse(outerObject.value);
+                console.log("Inner object:", innerObject);
+                return innerObject;
+              } else {
+                console.error("Unexpected data format");
+                return null;
+              }
+            } catch (error) {
+              console.error("Error parsing JSON:", error);
+              console.log("First 100 chars:", rawString.substring(0, 100));
+              return null;
+            }
+          }
           try {
             // Expanded stop list combining standard English stop words (inspired by NLTK)
             // with additional HTML/wiki-specific tokens that are common in Wikipedia pages.
+            // console.log("Processing key:", key);
+            // const articleData = parseArticleData(value);
+            // console.log("Parsed article data:", articleData);
             const stopWords = new Set([
               // Common English stop words (keep your original list)
               "i", "me", "my", "myself", "we", "our", "ours", "ourselves",
@@ -463,9 +464,11 @@ distribution.node.start(async (server) => {
             // Pre-compile the regex pattern for better performance
             const alphaOnlyPattern = /^[a-z]+$/;
 
-            const docData = value;
+            
+            const docData = parseArticleData(value);
             const docId = docData.url;
             const words = docData.article_words || [];
+            console.log("Processing document:", docId);
 
             // Use a Map for word counts - slightly more efficient than object literals
             const wordCounts = new Map();
@@ -489,10 +492,12 @@ distribution.node.start(async (server) => {
               wordCounts.set(cleanWord, (wordCounts.get(cleanWord) || 0) + 1);
             }
 
+            console.log(`Document ID: ${docId}, Total words processed: ${totalWords}`);
+
             // Emit each word with document ID, count, and total number of words processed
             // Use Array.from for better performance on large maps
             return Array.from(wordCounts, ([word, count]) => {
-              // console.log(`Mapper emitting word: ${word}, count: ${count}, docId: ${docId}, totalWords: ${totalWords}`);
+              console.log(`Mapper emitting word: ${word}, count: ${count}, docId: ${docId}, totalWords: ${totalWords}`);
               return { [word]: { docId, count, totalWords } };
             });
           } catch (err) {
@@ -1563,9 +1568,6 @@ distribution.node.start(async (server) => {
   // Cleanup function
   const finish = async () => {
     console.log("SHUTTING DOWN...");
-    for (const node of nodes) {
-      await stop_node(node);
-    }
     server.close();
   };
 });

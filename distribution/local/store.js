@@ -126,8 +126,8 @@ function get(configuration, callback) {
     try {
       const parsed = JSON.parse(data);
       const obj = util.deserialize(parsed);
-      console.log("NodeID: %s, retrieved file: %s", nodeID, filePath);
-      console.log("Deserialized object:", obj); // For debugging purposes
+      // console.log("NodeID: %s, retrieved file: %s", nodeID, filePath);
+      // console.log("Deserialized object:", obj); // For debugging purposes
       return callback(null, obj);
     } catch (error) {
       console.error(`Error deserializing data for key ${key}: ${error.message}`);
@@ -190,7 +190,7 @@ function del(configuration, callback) {
       return callback(e, null);
     }
 
-    console.log("NodeID: %s, deleting file: %s", nodeID, filePath);
+    // console.log("NodeID: %s, deleting file: %s", nodeID, filePath);
 
     // now remove the file
     fs.unlink(filePath, (err) => {

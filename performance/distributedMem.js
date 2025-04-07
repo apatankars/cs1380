@@ -10,7 +10,7 @@ const node2 = { ip: '18.117.173.221', port: 1234 };
 const node3 = { ip: '18.220.188.68', port: 1234 };
 
 const groupName = 'mygroup';
-const groupConfig = { gid: groupName, hash: id.consistentHash };
+const groupConfig = { gid: groupName, hash: id.naiveHash };
 
 const groupObj = {};
 groupObj[id.getSID(node1)] = node1;

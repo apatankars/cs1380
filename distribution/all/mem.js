@@ -6,7 +6,7 @@ const id = util.id;
 function mem(config) {
   const context = {};
   context.gid = config.gid || 'all';
-  context.hash = config.hash || global.distribution.util.id.consistentHash; // default to consistentHash if not provided
+  context.hash = config.hash || global.distribution.util.id.naiveHash; // default to consistentHash if not provided
 
   const cb = (error, value) => {
     if (error) {
