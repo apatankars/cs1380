@@ -258,6 +258,7 @@ Phase Statistics:
             
             storageService.put([], {key: "map@" + job_id, gid: gid}, (err, val) => {
               if (err) {
+                console.error(`[MR-${job_id}] Node ${nodeId}: Error saving empty map results as no batch keys: ${err.message}`);
                 callback(err, null);
                 return;
               }
@@ -300,6 +301,7 @@ Phase Statistics:
               const mapResultName = "map@" + job_id;
               storageService.put(mapResults, {key: mapResultName, gid: gid}, (err, val) => {
                 if (err) {
+                  console.error(`[MR-${job_id}] Node ${nodeId}: Error saving map results: ${err.message}`);
                   callback(err, null);
                   return;
                 }
@@ -374,6 +376,7 @@ Phase Statistics:
                     const mapResultName = "map@" + job_id;
                     storageService.put(mapResults, {key: mapResultName, gid: gid}, (err, val) => {
                       if (err) {
+                        console.error(`[MR-${job_id}] Node ${nodeId}: Error saving map results: ${err.message}`);
                         callback(err, null);
                         return;
                       }
@@ -951,7 +954,7 @@ Phase Statistics:
            if (e && !isEmptyObject(e)) {
             // Handle the error gracefully, log it and return
             console.error(`[MR-${mrId}] Error starting map phase:`, e);
-            console.error(`[MR-${mrId}] Setup config:`, JSON.stringify(setupConfig, null, 2));
+            // console.error(`[MR-${mrId}] Setup config:`, JSON.stringify(setupConfig, null, 2));
             cb(e, null); // Report the error back to the caller
           } else {
             console.log(`[MR-${mrId}] Map phase started successfully`);

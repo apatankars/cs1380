@@ -497,7 +497,7 @@ distribution.node.start(async (server) => {
             // Emit each word with document ID, count, and total number of words processed
             // Use Array.from for better performance on large maps
             return Array.from(wordCounts, ([word, count]) => {
-              console.log(`Mapper emitting word: ${word}, count: ${count}, docId: ${docId}, totalWords: ${totalWords}`);
+              // console.log(`Mapper emitting word: ${word}, count: ${count}, docId: ${docId}, totalWords: ${totalWords}`);
               return { [word]: { docId, count, totalWords } };
             });
           } catch (err) {
