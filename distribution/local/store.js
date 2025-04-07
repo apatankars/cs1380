@@ -62,7 +62,7 @@ function put(state, configuration, callback) {
 
   const filePath = path.join(groupDir, sanitizeKey(key) + '.json');
 
-  let value = JSON.stringify(util.serialize(state));
+  let value = util.serialize(state);
 
   fs.writeFile(filePath, JSON.stringify(value), (err) => {
     if (err) {
@@ -79,22 +79,18 @@ function get(configuration, callback) {
   let key;
   let gid = 'local';
 
-  // console.log("Getting value for configuration:", configuration, "on node:", nodeID);
+  
   if (configuration.key === null) {
     // "List all keys in the group"
     // build the dir path, read the filenames, remove .json, etc.
     const groupDir = path.join('store', nodeID, configuration.gid);
     // If the directory doesn’t exist or is empty, return []
-    // console.log("Listing keys in group directory:", groupDir);
     if (!fs.existsSync(groupDir)) {
-      // console.log("Group directory does not exist:", groupDir);
       return callback(null, []);
     }
     const files = fs.readdirSync(groupDir); // e.g. [ 'jcarb.json', 'someKey.json' ]
-    // console.log("Found files in group directory:", files);
     // remove the .json from each for "key" names
     const keys = files.map((f) => f.replace(/\.json$/, ''));
-    // console.log("Returning keys:", keys, "for node:", nodeID);
     return callback(null, keys);
   }
 
@@ -122,29 +118,27 @@ function get(configuration, callback) {
     return callback(new Error('No value found for key: ' + key), null);
   }
 
+
   // read & deserialize
-  // console.log(`Reading file from path: ${filePath} for key: ${key} on node: ${nodeID} with stats: ${JSON.stringify(fs.statSync(filePath).size)}`);
   fs.readFile(filePath, 'utf8', (err, data) => {
     if (err) return callback(err, null);
 
-    let value = JSON.parse(data);
-      const obj = util.deserialize(value);
-      // console.log(global.nodeConfig.port, "RETURNING VALUE FOR KEY", configuration.key,": ", obj); // Log the deserialized object for debugging
+    try {
+      const parsed = JSON.parse(data);
+      const obj = util.deserialize(parsed);
+      console.log("NodeID: %s, retrieved file: %s", nodeID, filePath);
+      console.log("Deserialized object:", obj); // For debugging purposes
       return callback(null, obj);
-
-    // try {
-      
-    // } catch (e) {
-    //   console.log(global.nodeConfig.port,"ERROR FOR KEY", configuration.key,": ", e)
-    //   return callback(e, null);
-    // }
+    } catch (error) {
+      console.error(`Error deserializing data for key ${key}: ${error.message}`);
+      return callback(error, null);
+    }
   });
 }
 
 function getGroupKeys(gid, callback) {
   let nodeConfig = global.nodeConfig;
   let nodeID = util.id.getNID(nodeConfig);
-  console.log("IN HERE");
 
   const groupDir = path.join('store', nodeID, gid);
     // If the directory doesn’t exist or is empty, return []
@@ -154,7 +148,6 @@ function getGroupKeys(gid, callback) {
   const files = fs.readdirSync(groupDir); // e.g. [ 'jcarb.json', 'someKey.json' ]
   // remove the .json from each for "key" names
   const keys = files.map((f) => f.replace(/\.json$/, ''));
-  console.log("Found ", keys," for node: ", global.nodeConfig);
   return callback(null, keys);
 }
 
@@ -197,6 +190,8 @@ function del(configuration, callback) {
       return callback(e, null);
     }
 
+    console.log("NodeID: %s, deleting file: %s", nodeID, filePath);
+
     // now remove the file
     fs.unlink(filePath, (err) => {
       if (err) return callback(err, null);
@@ -206,7 +201,6 @@ function del(configuration, callback) {
 }
 
 function append(state, configuration, callback) {
-  // console.log("Appending state:", state, "with configuration:", configuration, "on node:", global.nodeConfig.port);
   
   // If no state is given, error out
   if (!state) {
@@ -243,8 +237,6 @@ function append(state, configuration, callback) {
       const parsed = JSON.parse(data);
       const existingData = util.deserialize(parsed);
       
-      // console.log("Existing data found for key:", key, "with data:", existingData);
-      
       // Create deep copy of existing data
       const result = JSON.parse(JSON.stringify(existingData));
       
@@ -262,8 +254,6 @@ function append(state, configuration, callback) {
         }
       });
       
-      // console.log("Final merged result:", result);
-      
       // Serialize without double encoding
       const serialized = util.serialize(result);
       
@@ -272,7 +262,6 @@ function append(state, configuration, callback) {
       
       callback(null, result);
     } catch (error) {
-      // console.log(`${nodeConfig.port}: Error processing existing data:`, error.message);
       // Instead of overwriting, try to salvage what we can
       // Create an array with the new value
       const result = {};
@@ -286,7 +275,6 @@ function append(state, configuration, callback) {
       }
   } else {
     // If file doesn't exist, create a new one
-    // console.log(`${nodeConfig.port}: No existing data found for key ${key}. Creating new entry.`);
     put(state, configuration, callback);
   }
 }

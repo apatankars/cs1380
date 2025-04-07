@@ -1,12 +1,11 @@
 const local = distribution.local;
-const { node } = require("@brown-ds/distribution");
 const util = require("../util/util");
 const id = util.id;
 
 function store(config) {
   const context = {};
   context.gid = config.gid || 'all';
-  context.hash = config.hash || global.distribution.util.id.naiveHash;
+  context.hash = config.hash || global.distribution.util.id.consistentHash; // default to consistentHash if not provided
 
   const cb = (error, value) => {
     if (error) {
@@ -47,8 +46,6 @@ function store(config) {
         return;
       }
 
-      // console.log('Getting  distribution store with configuration:', configuration, "on node:", node ? `${global.nodeConfig.ip}:${global.nodeConfig.port}` : 'local');
-
       if (configuration.key === null) {
         let keys = [];
         const remoteConfig = {
@@ -56,17 +53,12 @@ function store(config) {
         method: 'get',
         }
         distribution[context.gid].comm.send({gid: context.gid, key: null}, remoteConfig, (errMap, valMap) => {
-          // if (Object.apply(errMap).keys().length !== 0) {
-          //   console.error('Failed to get keys from the group:', errMap);
-          //   callback(errMap, null);
-          //   return;
-          // }
-          // console.log(`Successfully retrieved keys from the group for gid: ${context.gid}`, valMap);
+
           for (const key in valMap) {
             if (valMap.hasOwnProperty(key)) {
               
               let nodeKeys = valMap[key].filter(key => !key.includes('.DS_Store'));
-              // console.log(`Found keys for gid: ${context.gid} on node: ${key}, keys:`, nodeKeys);
+              
               keys = keys.concat(nodeKeys);
             }
           }
@@ -95,6 +87,7 @@ function store(config) {
 
         const message = [messageConfig];
 
+        console.log(`Sending get request to node: ${JSON.stringify(chosenNode)} with key: ${JSON.stringify(messageConfig)}`);
         local.comm.send(message, config, (err, val) => {
           if (err) {
             callback(err, null);
@@ -106,6 +99,7 @@ function store(config) {
     },
 
     put: (state, configuration, callback) => {
+      
       callback = callback || cb;
       if (state === undefined || state === null ){
         callback(new Error('State is required'), null);
@@ -202,8 +196,6 @@ function store(config) {
           method: 'append',
           node: chosenNode
         };
-
-        // console.log("SENDING APPEND MESSAGE TO NODE:", chosenNode.port, "with configuration:", configuration);
 
         const messageConfig = {
           key: "reduce@" + configuration.jid,

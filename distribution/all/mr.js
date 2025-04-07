@@ -11,206 +11,58 @@ function mr(config) {
    * @return {void}
    */
   function exec(configuration, cb) {
-    const keys = configuration.keys
     const mapper = configuration.map;
     const reducer = configuration.reduce;
     const distribution = require("../../config");
     const mrId = require("crypto").randomUUID().substring(0, 8); // Get first 8 chars as ID
     const mrServiceName = `mr@${mrId}`; // mr@<uuid>
-    const checkPointID = configuration.checkPointID || mrId; // Fallback to mrServiceName if no checkpoint ID provided
+    const batchIndex = configuration.batchIndex || 0; // The batch number we're processing
+    const batchSize = configuration.batchSize || 10; // How many keys each node should process
+    const batchInfo = configuration.batchInfo || { current: batchIndex + 1, total: 999 }; // Batch tracking info
 
-    // Create checkpoint manager
-    const checkpointManager = {
-      saveInterval: configuration.checkpoint_interval || 5, // Save every N batches
-      enabled: configuration.enable_checkpoints !== false, // Enable by default
-      lastSaveTime: Date.now(),
-      checkpointPath: `./checkpoints/mr_${mrId}`,
-      oldCheckpointPath: `./checkpoints/${checkPointID}`, // Fallback for old checkpoints
-      partialResults: [],
-      
-      // Save checkpoint with current state and partial results
-      save: function(state, partialResults, callback) {
-        if (!this.enabled) return callback && callback();
-        
-        // Create checkpoint directory if it doesn't exist
-        const checkpointDir = require('path').dirname(this.checkpointPath);
-        if (!require('fs').existsSync(checkpointDir)) {
-          require('fs').mkdirSync(checkpointDir, { recursive: true });
-        }
-        
-        const checkpoint = {
-          state: JSON.parse(JSON.stringify(state)), // Clone state
-          keyTrackingMap: JSON.parse(JSON.stringify(keyTrackingMap)), // Clone tracking data
-          partialResults: partialResults || [],
-          timestamp: Date.now()
-        };
-        
-        console.log(`[MR-${mrId}] Saving checkpoint at batch ${state.batch_num}/${state.num_batches}`);
-        
-        // Save to file
-        require('fs').writeFile(
-          `${this.checkpointPath}_state.json`, 
-          JSON.stringify(checkpoint, null, 2), 
-          (err) => {
-            if (err) {
-              console.error(`[MR-${mrId}] Error saving checkpoint state: ${err.message}`);
-            } else {
-              this.lastSaveTime = Date.now();
-              console.log(`[MR-${mrId}] Checkpoint saved successfully`);
-            }
-            if (callback) callback(err);
-          }
-        );
-        
-        // For large result sets, save separately to avoid memory issues
-        if (partialResults && partialResults.length > 0) {
-          require('fs').writeFile(
-            `${this.checkpointPath}_results.json`,
-            JSON.stringify({ results: partialResults }, null, 2),
-            (err) => {
-              if (err) {
-                console.error(`[MR-${mrId}] Error saving results: ${err.message}`);
-              }
-            }
-          );
-        }
-      },
-      
-      // Load checkpoint
-      load: function(callback) {
-        if (!this.enabled) return callback && callback(null, null);
-        
-        // Check if checkpoint exists
-        if (!require('fs').existsSync(`${this.oldCheckpointPath}_state.json`)) {
-          return callback && callback(new Error('No checkpoint found'), null);
-        }
-        
-        console.log(`[MR-${mrId}] Loading checkpoint...`);
-        
-        // Load state
-        require('fs').readFile(`${this.oldCheckpointPath}_state.json`, 'utf8', (err, data) => {
-          if (err) {
-            console.error(`[MR-${mrId}] Error loading checkpoint state: ${err.message}`);
-            return callback && callback(err, null);
-          }
-          
-          try {
-            const checkpoint = JSON.parse(data);
-            console.log(`[MR-${mrId}] Checkpoint loaded from ${new Date(checkpoint.timestamp).toLocaleString()}`);
-            
-            // Check if results file exists
-            if (require('fs').existsSync(`${this.oldCheckpointPath}_results.json`)) {
-              require('fs').readFile(`${this.oldCheckpointPath}_results.json`, 'utf8', (err, resultsData) => {
-                if (err) {
-                  console.error(`[MR-${mrId}] Error loading results: ${err.message}`);
-                  return callback && callback(null, checkpoint);
-                }
-                
-                try {
-                  const resultsObj = JSON.parse(resultsData);
-                  checkpoint.partialResults = resultsObj.results || [];
-                  callback && callback(null, checkpoint);
-                } catch (parseErr) {
-                  console.error(`[MR-${mrId}] Error parsing results: ${parseErr.message}`);
-                  callback && callback(null, checkpoint);
-                }
-              });
-            } else {
-              callback && callback(null, checkpoint);
-            }
-          } catch (parseErr) {
-            console.error(`[MR-${mrId}] Error parsing checkpoint: ${parseErr.message}`);
-            callback && callback(parseErr, null);
-          }
-        });
-      },
-      
-      // Clear checkpoint
-      clear: function(callback) {
-        if (!this.enabled) return callback && callback();
-        
-        console.log(`[MR-${mrId}] Clearing checkpoint...`);
-        
-        // Remove state file
-        if (require('fs').existsSync(`${this.checkpointPath}_state.json`)) {
-          require('fs').unlinkSync(`${this.checkpointPath}_state.json`);
-        }
-        
-        // Remove results file
-        if (require('fs').existsSync(`${this.checkpointPath}_results.json`)) {
-          require('fs').unlinkSync(`${this.checkpointPath}_results.json`);
-        }
-        
-        callback && callback();
-      },
-      
-      // Check if it's time to save based on interval or memory pressure
-      shouldSave: function(state) {
-        if (!this.enabled) return false;
-        
-        // Check time interval (at least 2 minutes between saves)
-        const timeBasedSave = (Date.now() - this.lastSaveTime) > 120000;
-        
-        // Check batch-based interval
-        const batchBasedSave = state.batch_num % this.saveInterval === 0;
-        
-        // Check memory pressure (save if memory usage is high)
-        const memUsage = process.memoryUsage();
-        const memPressure = (memUsage.heapUsed / memUsage.heapTotal) > 0.7;
-        
-        return timeBasedSave || batchBasedSave || memPressure;
-      }
-    };
+    function isEmptyObject(obj) {
+      return obj && typeof obj === 'object' && Object.keys(obj).length === 0;
+    }
 
-    // Configuration parameters
-    const BATCH_SIZE = configuration.batch_size || 10;
-    const DEBUG_MODE = configuration.debug_mode || true; 
+    
+    // Ensure we have the correct group ID
+    if (!configuration.gid) {
+      console.log(`[MR-${mrId}] Warning: No group ID provided, using default "${config.gid}"`);
+    }
 
     let results = [];
-    const resultKey = mrServiceName + "@results";
 
-    const num_batches = Math.ceil(keys.length / BATCH_SIZE);
-    
-    console.log(`[MR-${mrId}] Starting MapReduce job with ${keys.length} keys, ${num_batches} batches, batch size: ${BATCH_SIZE}`);
+    console.log(`[MR-${mrId}] Starting MapReduce job for batch ${batchInfo.current}/${batchInfo.total} with batch size ${batchSize}`);
 
     // NEW: Tracking structures for key processing
     const keyTrackingMap = {
-      total: keys.length,
-      batches: {},
-      nodeStats: {},
       processedKeys: new Set(),
       mapPhaseStats: {
         totalKeysProcessed: 0,
-        totalDuration: 0,
-        batchStats: {}
+        totalDuration: 0
       },
       shufflePhaseStats: {
         totalEntries: 0,
-        totalDuration: 0,
-        batchStats: {}
+        totalDuration: 0
       },
       reducePhaseStats: {
         totalKeysProcessed: 0,
-        totalDuration: 0,
-        batchStats: {}
+        totalDuration: 0
       }
     };
 
     let state_dict = {
       phase: "MAP",
       phase_count: 0,
-      batch_num: 0,
-      num_batches: num_batches,
-      empty_batch_count: 0,
-      empty_batch_threshold: 3,
-      total_processed_keys: 0,
-      batch_start_time: Date.now(),
       job_start_time: Date.now(),
+      batch_start_time: Date.now(),
+      batchIndex: batchIndex,
+      batchSize: batchSize
     };
     
     // Log memory usage at start of job
     const memUsage = process.memoryUsage();
-    console.log(`[MR-${mrId}] Initial memory usage: heap=${Math.round(memUsage.heapUsed/1024/1024)}MB, total=${Math.round(memUsage.heapTotal/1024/1024)}MB`);
+    console.log(`[MR-${mrId}] Initial memory usage: heap=${Math.round(memUsage.heapUsed/1024/1024)}MB/${Math.round(memUsage.heapTotal/1024/1024)}MB (${Math.round((memUsage.heapUsed/memUsage.heapTotal)*100)}% used)`);
 
     /**
      * Notify function - runs on coordinator node
@@ -218,8 +70,7 @@ function mr(config) {
     const notify = (config, callback) => {
       const phase_map = {
         MAP: "SHUFFLE",
-        SHUFFLE: "REDUCE",
-        REDUCE: "MAP"
+        SHUFFLE: "REDUCE"
       };
       
       if (config.status === "ERROR") {
@@ -228,12 +79,12 @@ function mr(config) {
         return;
       } 
 
-      const sleep_iter = () => new Promise((resolve, reject) => {
-            setTimeout(() => {
-                resolve();
-            }, 100 + 100 * Math.random());
-        });
-      
+      function logPrefix(phase, nodeId = global.nodeConfig.port, subBatch = null) {
+        const batchInfo = `BATCH:${state_dict.batchIndex}`;
+        const subBatchInfo = subBatch ? `[SUB:${subBatch}]` : '';
+        return `[MR-${mrId}][${phase}][NODE:${nodeId}][${batchInfo}]${subBatchInfo}`;
+      }
+
       // Get the local group node count
       distribution.local.groups.get(config.gid, (err, group) => {
         if (err) {
@@ -257,104 +108,47 @@ function mr(config) {
           return;
         }
 
-        // NEW: Track node statistics
+        // Track node statistics
         const nodeId = config.nodeId || "unknown";
-        if (!keyTrackingMap.nodeStats[nodeId]) {
-          keyTrackingMap.nodeStats[nodeId] = {
-            mapsProcessed: 0,
-            keysProcessed: 0,
-            emptyBatches: 0,
-            shufflesProcessed: 0,
-            reducesProcessed: 0
-          };
-        }
-
-        // NEW: Track processing stats for each phase
+        
+        // Track processing stats for each phase
         if (config.phase === "MAP") {
           if (config.processedKeys && Array.isArray(config.processedKeys)) {
-            keyTrackingMap.nodeStats[nodeId].mapsProcessed++;
-            keyTrackingMap.nodeStats[nodeId].keysProcessed += config.processedKeys.length;
-            
             // Add all processed keys to the global set
             config.processedKeys.forEach(key => keyTrackingMap.processedKeys.add(key));
-            
-            // Update map phase statistics
-            if (!keyTrackingMap.mapPhaseStats.batchStats[state_dict.batch_num]) {
-              keyTrackingMap.mapPhaseStats.batchStats[state_dict.batch_num] = {
-                keysProcessed: 0,
-                nodeContributions: {}
-              };
-            }
-            keyTrackingMap.mapPhaseStats.batchStats[state_dict.batch_num].keysProcessed += config.processedKeys.length;
-            keyTrackingMap.mapPhaseStats.batchStats[state_dict.batch_num].nodeContributions[nodeId] = config.processedKeys.length;
             keyTrackingMap.mapPhaseStats.totalKeysProcessed += config.processedKeys.length;
           }
-          
-          if (config.noKeysToProcess) {
-            keyTrackingMap.nodeStats[nodeId].emptyBatches++;
-          }
         } else if (config.phase === "SHUFFLE") {
-          keyTrackingMap.nodeStats[nodeId].shufflesProcessed++;
-          
-          // Update shuffle phase statistics
           if (config.shuffleStats) {
-            if (!keyTrackingMap.shufflePhaseStats.batchStats[state_dict.batch_num]) {
-              keyTrackingMap.shufflePhaseStats.batchStats[state_dict.batch_num] = {
-                entriesProcessed: 0,
-                nodeContributions: {}
-              };
-            }
-            keyTrackingMap.shufflePhaseStats.batchStats[state_dict.batch_num].entriesProcessed += config.shuffleStats.entriesProcessed || 0;
-            keyTrackingMap.shufflePhaseStats.batchStats[state_dict.batch_num].nodeContributions[nodeId] = config.shuffleStats.entriesProcessed || 0;
             keyTrackingMap.shufflePhaseStats.totalEntries += config.shuffleStats.entriesProcessed || 0;
           }
         } else if (config.phase === "REDUCE") {
-          keyTrackingMap.nodeStats[nodeId].reducesProcessed++;
-          
-          // Update reduce phase statistics
           if (config.reduceStats) {
-            if (!keyTrackingMap.reducePhaseStats.batchStats[state_dict.batch_num]) {
-              keyTrackingMap.reducePhaseStats.batchStats[state_dict.batch_num] = {
-                keysProcessed: 0,
-                nodeContributions: {}
-              };
-            }
-            keyTrackingMap.reducePhaseStats.batchStats[state_dict.batch_num].keysProcessed += config.reduceStats.keysProcessed || 0;
-            keyTrackingMap.reducePhaseStats.batchStats[state_dict.batch_num].nodeContributions[nodeId] = config.reduceStats.keysProcessed || 0;
             keyTrackingMap.reducePhaseStats.totalKeysProcessed += config.reduceStats.keysProcessed || 0;
           }
         }
 
-        // Track nodes with no keys to process
-        if (config.noKeysToProcess) {
-          if (!state_dict.noKeysNodes) {
-            state_dict.noKeysNodes = new Set();
-          }
-          state_dict.noKeysNodes.add(nodeId);
-        }
-
         // Log progress
+        const memUsage = process.memoryUsage();
         console.log(
-          `[MR-${mrId}] Node ${global.nodeConfig.port}: Received notification for phase ${config.phase}. Current count: ${state_dict.phase_count}/${groupNodeCount}, batch: ${state_dict.batch_num}/${state_dict.num_batches}. Memory usage: heap=${Math.round(process.memoryUsage().heapUsed/1024/1024)}MB, total=${Math.round(process.memoryUsage().heapTotal/1024/1024)}MB, percent used: ${(process.memoryUsage().heapUsed / process.memoryUsage().heapTotal * 100).toFixed(2)}%`
+          `[MR-${mrId}] Node ${global.nodeConfig.port}: Received notification for phase ${config.phase}. Current count: ${state_dict.phase_count}/${groupNodeCount}, batch: ${batchInfo.current}/${batchInfo.total}. Memory usage: heap=${Math.round(memUsage.heapUsed/1024/1024)}MB/${Math.round(memUsage.heapTotal/1024/1024)}MB (${Math.round((memUsage.heapUsed/memUsage.heapTotal)*100)}% used)`
         );
         
         // Collect reduce results
         if (state_dict.phase === "REDUCE" && config.results) {
-          console.log(`[MR-${mrId}] Node ${global.nodeConfig.port}: Collecting reduce results from ${config.nodeId}. Received ${config.results.length} results.`);
-          console.log(`[MR-${mrId}] Node ${global.nodeConfig.port}: Memory usage during reduce phase: heap=${Math.round(process.memoryUsage().heapUsed/1024/1024)}MB, total=${Math.round(process.memoryUsage().heapTotal/1024/1024)}MB`);
+          console.log(`${logPrefix('REDUCE-COLLECT')} Collecting results from ${config.nodeId}. Received ${config.results.length} results.`);
+          
+          // Add to results directly for this single batch
           results = results.concat(config.results);
-          // TODO: Need to figure out a better solution on how to save the aggregated results in memory without causing memory pressure
-          console.log(`[MR-${mrId}] Node ${global.nodeConfig.port}: Collected ${config.results.length} results from node ${nodeId}. Total results now: ${results.length}`);
-          console.log(`[MR-${mrId}] Node ${global.nodeConfig.port}: Memory usage after results: heap=${Math.round(process.memoryUsage().heapUsed/1024/1024)}MB, total=${Math.round(process.memoryUsage().heapTotal/1024/1024)}MB`);
+          
+          console.log(`[MR-${mrId}] Total collected results: ${results.length}`);
         }
 
         // When all nodes have responded for the current phase
         if (state_dict.phase_count === groupNodeCount) {
           // Calculate phase duration
           const phaseDuration = Date.now() - state_dict.batch_start_time;
-          console.log(
-            `[MR-${mrId}] Node ${global.nodeConfig.port}: Phase ${state_dict.phase} complete in ${phaseDuration}ms. Received ${state_dict.phase_count} of ${groupNodeCount} responses.`
-          );
+          console.log(`${logPrefix(state_dict.phase + '-COMPLETE')} Phase complete in ${phaseDuration}ms. Received ${state_dict.phase_count}/${groupNodeCount} responses.`);
           
           // Update phase duration statistics
           if (state_dict.phase === "MAP") {
@@ -368,216 +162,35 @@ function mr(config) {
           // Handle phase completion
           if (state_dict.phase === "REDUCE") {
             // Calculate batch duration
-            const batchDuration = Date.now() - state_dict.batch_start_time;
-            console.log(`[MR-${mrId}] Node ${global.nodeConfig.port}: Batch ${state_dict.batch_num}/${state_dict.num_batches} completed in ${batchDuration}ms.`);
+            const batchDuration = Date.now() - state_dict.job_start_time;
+            console.log(`${logPrefix('COMPLETE')} Job completed in ${batchDuration}ms with ${results.length} results.`);
             
-            // NEW: Track batch statistics
-            keyTrackingMap.batches[state_dict.batch_num] = {
-              duration: batchDuration,
-              mapKeys: keyTrackingMap.mapPhaseStats.batchStats[state_dict.batch_num]?.keysProcessed || 0,
-              shuffleEntries: keyTrackingMap.shufflePhaseStats.batchStats[state_dict.batch_num]?.entriesProcessed || 0,
-              reduceKeys: keyTrackingMap.reducePhaseStats.batchStats[state_dict.batch_num]?.keysProcessed || 0,
-              resultCount: config.results ? config.results.length : 0
-            };
+            // Print key processing summary
+            const totalProcessed = keyTrackingMap.processedKeys.size;
             
-            // Log batch results
-            console.log(`Results collected so far: ${results.length}`);
-            const batchResults = config.results || [];
-            console.log(`Terms in this batch: ${batchResults.length}`);
-            
-            // Calculate duplicate terms
-            const termCounts = {};
-            batchResults.forEach(result => {
-              if (result.word) {
-                termCounts[result.word] = (termCounts[result.word] || 0) + 1;
-              }
-            });
-            const duplicates = Object.keys(termCounts).filter(term => termCounts[term] > 1).length;
-            console.log(`Duplicate terms in this batch: ${duplicates}`);
-            
-            // Increment the batch counter
-            state_dict.batch_num = state_dict.batch_num + 1;
-            
-            // Check if all nodes reported no keys
-            const allNodesHaveNoKeys = state_dict.noKeysNodes && 
-                                       state_dict.noKeysNodes.size === groupNodeCount;
-            
-            if (allNodesHaveNoKeys) {
-              state_dict.empty_batch_count++;
-              console.log(`[MR-${mrId}] All nodes reported no keys to process for batch ${state_dict.batch_num-1}. Empty batch count: ${state_dict.empty_batch_count}`);
-              
-              // Early termination if we've hit the threshold of empty batches
-              if (state_dict.empty_batch_count >= state_dict.empty_batch_threshold) {
-                console.log(`[MR-${mrId}] Reached ${state_dict.empty_batch_threshold} consecutive empty batches. Terminating job early.`);
-                
-                // NEW: Print key processing summary
-                const totalProcessed = keyTrackingMap.processedKeys.size;
-                const coverage = (totalProcessed / keyTrackingMap.total) * 100;
-                
-                console.log(`
+            console.log(`
 [MR-${mrId}] KEY PROCESSING SUMMARY:
-- Total keys: ${keyTrackingMap.total}
-- Total processed: ${totalProcessed} (${coverage.toFixed(2)}%)
-- Keys not processed: ${keyTrackingMap.total - totalProcessed}
-- Batches completed: ${Object.keys(keyTrackingMap.batches).length}/${num_batches}
+- Total processed keys: ${totalProcessed}
 
 Phase Statistics:
 - Map phase: ${keyTrackingMap.mapPhaseStats.totalKeysProcessed} keys processed in ${keyTrackingMap.mapPhaseStats.totalDuration}ms
 - Shuffle phase: ${keyTrackingMap.shufflePhaseStats.totalEntries} entries processed in ${keyTrackingMap.shufflePhaseStats.totalDuration}ms
 - Reduce phase: ${keyTrackingMap.reducePhaseStats.totalKeysProcessed} keys processed in ${keyTrackingMap.reducePhaseStats.totalDuration}ms
-
-Node Statistics:`);
-                
-                // Print per-node statistics
-                Object.keys(keyTrackingMap.nodeStats).forEach(nodeId => {
-                  const stats = keyTrackingMap.nodeStats[nodeId];
-                  console.log(`- Node ${nodeId}: ${stats.keysProcessed} keys processed in ${stats.mapsProcessed} map operations, ${stats.emptyBatches} empty batches`);
-                });
-                
-                // Calculate total job duration
-                const jobDuration = Date.now() - state_dict.job_start_time;
-                console.log(`[MR-${mrId}] MapReduce job completed early in ${jobDuration}ms. Final result size: ${results.length}`);
-                
-                // Clean up the service when done
-                distribution[context.gid].comm.send([config.jid], {service: 'routes', method: 'rem'}, (e, v) => {
-                  cb(null, results);
-                  return;
-                });
-                return;
-              }
-            } else {
-              // Reset empty batch counter if we found data
-              state_dict.empty_batch_count = 0;
-            }
-
-            // Save checkpoint if needed
-            if (checkpointManager.shouldSave(state_dict)) {
-              checkpointManager.save(state_dict, results, (err) => {
-                if (err) {
-                  console.error(`[MR-${mrId}] Failed to save checkpoint: ${err.message}`);
-                }
-              });
-            }
+`);
             
-            // Reset noKeysNodes for next batch
-            state_dict.noKeysNodes = new Set();
-            
-            // Check if all batches are processed
-            if (state_dict.batch_num >= state_dict.num_batches) {
-              // Print key processing summary
-              const totalProcessed = keyTrackingMap.processedKeys.size;
-              const coverage = (totalProcessed / keyTrackingMap.total) * 100;
-              
-              console.log(`
-[MR-${mrId}] FINAL KEY PROCESSING SUMMARY:
-- Total keys: ${keyTrackingMap.total}
-- Total processed: ${totalProcessed} (${coverage.toFixed(2)}%)
-- Keys not processed: ${keyTrackingMap.total - totalProcessed}
-- Batches completed: ${Object.keys(keyTrackingMap.batches).length}/${num_batches}
-
-Phase Statistics:
-- Map phase: ${keyTrackingMap.mapPhaseStats.totalKeysProcessed} keys processed in ${keyTrackingMap.mapPhaseStats.totalDuration}ms
-- Shuffle phase: ${keyTrackingMap.shufflePhaseStats.totalEntries} entries processed in ${keyTrackingMap.shufflePhaseStats.totalDuration}ms
-- Reduce phase: ${keyTrackingMap.reducePhaseStats.totalKeysProcessed} keys processed in ${keyTrackingMap.reducePhaseStats.totalDuration}ms
-
-Node Statistics:`);
-              
-              // Print per-node statistics
-              Object.keys(keyTrackingMap.nodeStats).forEach(nodeId => {
-                const stats = keyTrackingMap.nodeStats[nodeId];
-                console.log(`- Node ${nodeId}: ${stats.keysProcessed} keys processed in ${stats.mapsProcessed} map operations, ${stats.emptyBatches} empty batches`);
-              });
-              
-              // Calculate total job duration
-              const jobDuration = Date.now() - state_dict.job_start_time;
-              console.log(`[MR-${mrId}] Node ${global.nodeConfig.port}: All batches completed in ${jobDuration}ms. Final result size: ${results.length}`);
-              
-              // Memory usage at end of job
-              const endMemUsage = process.memoryUsage();
-              console.log(`[MR-${mrId}] Final memory usage: heap=${Math.round(endMemUsage.heapUsed/1024/1024)}MB, total=${Math.round(endMemUsage.heapTotal/1024/1024)}MB`);
-              
-              checkpointManager.clear();
-
-              // Clean up the service when done
-              distribution[context.gid].comm.send([config.jid], {service: 'routes', method: 'rem'}, (e, v) => {
-                cb(null, results);
-                return;
-              });
-            } else {
-              // Reset for next batch
-              state_dict.phase_count = 0;
-              state_dict.phase = "MAP";
-              state_dict.batch_start_time = Date.now();
-              
-              console.log(`[MR-${mrId}] Node ${global.nodeConfig.port}: Starting next batch: ${state_dict.batch_num}/${state_dict.num_batches}`);
-
-              if (state_dict.batch_num % 5 === 0) {
-                // Want to timeout the next batch to allow for memory cleanup and garbage collection
-                console.log(`[MR-${mrId}] Node ${global.nodeConfig.port}: Pausing for 5 seconds to allow memory cleanup before next batch`);
-                console.log(`[MR-${mrId}] Node ${global.nodeConfig.port}: Current memory usage: heap=${Math.round(process.memoryUsage().heapUsed/1024/1024)}MB, total=${Math.round(process.memoryUsage().heapTotal/1024/1024)}MB`);
-
-                setTimeout(() => {
-                  // Trigger next batch map
-                  distribution[context.gid].comm.send(["memory"], {service: "status", method: "get"}, (errMem, memInfo) => {
-                      // console.log("Memory info from status service: ", memInfo, typeof memInfo, errMem);
-                      Object.entries(memInfo).forEach(([node, memoryInfo]) => {
-                        console.log(`[MR-${mrId}] Node ${node} memory before clear: heapUsed=${Math.round(memoryInfo.heapUsed/1024/1024)}MB, heapTotal=${Math.round(memoryInfo.heapTotal/1024/1024)}MB. Percent used: ${(memoryInfo.heapUsed / memoryInfo.heapTotal * 100).toFixed(2)}%`);
-                      });
-                    
-                    distribution[context.gid].comm.send([{gid: context.gid}], {service: "mem", method: "clear"}, (err, val) => {
-                      // console.log(`[MR-${mrId}] Node ${global.nodeConfig.port}: Clear memory response:`, val, typeof val, err);
-                      if (val.success) {
-                        // Handle error in clearing memory
-                        console.log(`[MR-${mrId}] Node ${global.nodeConfig.port}: Memory cleared successfully`);
-                        
-                      } else {
-                        console.error("[MR-",mrId, "] Node ", global.nodeConfig.port, ": Error clearing memory: ", err);
-                      }
-                      distribution[context.gid].comm.send(["memory"], {service: "status", method: "get"}, (errMem, memInfo) => {
-                        // console.log("Memory info from status service: ", memInfo, typeof memInfo, errMem);
-                        Object.entries(memInfo).forEach(([node, memoryInfo]) => {
-                          console.log(`[MR-${mrId}] Node ${node} memory after clear: heapUsed=${Math.round(memoryInfo.heapUsed/1024/1024)}MB, heapTotal=${Math.round(memoryInfo.heapTotal/1024/1024)}MB. Percent used: ${(memoryInfo.heapUsed / memoryInfo.heapTotal * 100).toFixed(2)}%`);
-                        });
-                        const setupConfig = {
-                          gid: context.gid,
-                          jid: mrServiceName,
-                          keys: keys,
-                          batch_num: state_dict.batch_num,
-                          batch_size: BATCH_SIZE
-                          };
-                        
-                        distribution[context.gid].comm.send([setupConfig], {gid: 'local', service: mrServiceName, method: 'map'}, (e, v) => {
-                          // No callback handling needed here
-                        });
-                      });
-                    });
-                  });
-                }, 5000); // Pause for 1 second before sending next batch
-              } else {
-              
-                // Trigger next batch map
-                const setupConfig = {
-                  gid: context.gid,
-                  jid: mrServiceName,
-                  keys: keys,
-                  batch_num: state_dict.batch_num,
-                  batch_size: BATCH_SIZE
-                };
-                
-                distribution[context.gid].comm.send([setupConfig], {gid: 'local', service: mrServiceName, method: 'map'}, (e, v) => {
-                  // No callback handling needed here
-                });
-                return;
-            }
-            }
+            // Clean up and return results
+            distribution[context.gid].comm.send([config.jid], {service: 'routes', method: 'rem'}, (e, v) => {
+              console.log(`[MR-${mrId}] Job service removed, returning ${results.length} results`);
+              cb(null, results);
+            });
           } else {
-            // Move to the next phase in the current batch
+            // Move to the next phase
             let new_phase = phase_map[state_dict.phase];
             state_dict.phase = new_phase;
             state_dict.phase_count = 0;
             state_dict.batch_start_time = Date.now(); // Reset time for new phase
             
-            console.log(`[MR-${mrId}] Node ${global.nodeConfig.port}: Moving to phase ${new_phase} for job: ${config.jid}, batch: ${state_dict.batch_num}/${state_dict.num_batches}`);
+            console.log(`[MR-${mrId}] Node ${global.nodeConfig.port}: Moving to phase ${new_phase} for job: ${config.jid}`);
             
             let method = state_dict.phase.toLowerCase();
             let phaseConfig = {
@@ -594,19 +207,21 @@ Node Statistics:`);
     };
 
     /**
-     * Map function with enhanced key tracking
+     * Map function that processes locally stored keys based on batch index
+     * This is self-contained with no references to external variables
      */
     const map = (config, callback) => {
+      // These variables are defined within the scope of this function
       const gid = config.gid;
-      const job_id = config.jid;
-      const BATCH_SIZE = config.batch_size || 10;
-      const batch_num = config.batch_num || 0;
-      const nodeId = global.nodeConfig.port; // Get current node ID for tracking
+      const job_id = config.jid; 
+      const batchIndex = config.batch_index || 0;
+      const batchSize = config.batch_size || 10;
+      const nodeId = global.nodeConfig.port;
 
       // Performance metrics
       const mapStartTime = Date.now();
       const initialMemUsage = process.memoryUsage();
-      console.log(`[MR-${job_id}] Node ${nodeId}: Starting map phase. Memory: heap=${Math.round(initialMemUsage.heapUsed/1024/1024)}MB`);
+      console.log(`[MR-${job_id}] Node ${nodeId}: Starting map phase.  Memory: heap=${Math.round(initialMemUsage.heapUsed/1024/1024)}MB/${Math.round(initialMemUsage.heapTotal/1024/1024)}MB (${Math.round((initialMemUsage.heapUsed/initialMemUsage.heapTotal)*100)}% used)`);
 
       distribution.local.routes.get(job_id, (err, service) => {
         if (err) {
@@ -618,7 +233,7 @@ Node Statistics:`);
         const mapper = service.mapper;
         const storageService = distribution.local.mem;
         
-        // Get all keys first
+        // Get all local keys first, then calculate which ones to process in this batch
         distribution.local.store.get({gid: gid, key: null}, (err, localKeys) => {
           if (err) {
             console.error(`[MR-${job_id}] Node ${nodeId}: Error retrieving keys for gid ${gid}: ${err.message}`);
@@ -626,19 +241,20 @@ Node Statistics:`);
             return;
           }
 
-          let filteredKeys = localKeys.filter(key => !key.includes('.DS_Store'));
+          // Filter out system files and sort for consistent batching
+          let filteredKeys = localKeys.filter(key => !key.includes('.DS_Store')).sort();
           console.log(`[MR-${job_id}] Node ${nodeId}: Found ${filteredKeys.length} total keys on this node`);
 
-          const startIdx = batch_num * BATCH_SIZE;
-          const endIdx = Math.min(startIdx + BATCH_SIZE, filteredKeys.length);
-
-          let batchKeys = filteredKeys.slice(startIdx, endIdx);
+          // Calculate which keys to process in this batch
+          const startIdx = batchIndex * batchSize;
+          const endIdx = Math.min(startIdx + batchSize, filteredKeys.length);
+          const batchKeys = filteredKeys.slice(startIdx, endIdx);
           
-          // NEW: Create array to track processed keys
+          // Create array to track processed keys
           const processedKeys = [];
           
           if (batchKeys.length === 0) {
-            console.log(`[MR-${job_id}] Node ${nodeId}: No keys to process in batch ${batch_num}/${Math.ceil(filteredKeys.length/BATCH_SIZE)}. Proceeding to shuffle phase.`);
+            console.log(`[MR-${job_id}] Node ${nodeId}: No keys to process in batch ${batchIndex} (range ${startIdx}-${endIdx}). Proceeding to shuffle phase.`);
             
             storageService.put([], {key: "map@" + job_id, gid: gid}, (err, val) => {
               if (err) {
@@ -658,19 +274,20 @@ Node Statistics:`);
             return;
           }
 
-          console.log(`[MR-${job_id}] Node ${nodeId}: Processing ${batchKeys.length} keys in batch ${batch_num} (range ${startIdx}-${endIdx-1})`);
+          console.log(`[MR-${job_id}] Node ${nodeId}: Processing ${batchKeys.length} keys in batch ${batchIndex} (range ${startIdx}-${endIdx-1})`);
           
-          // Process keys in batches
+          // Process keys in sub-batches for efficiency
           let mapResults = [];
           let currentBatch = 0;
-          const totalBatches = Math.ceil(batchKeys.length / 4);
+          const SUB_BATCH_SIZE = Math.min(5, batchKeys.length);
+          const totalBatches = Math.ceil(batchKeys.length / SUB_BATCH_SIZE);
 
-          console.log(`[MR-${job_id}] Node ${nodeId}: Total sub-batches to process: ${totalBatches}, BATCH_SIZE: ${BATCH_SIZE}`);
+          console.log(`[MR-${job_id}] Node ${nodeId}: Processing in ${totalBatches} sub-batches, SUB_BATCH_SIZE: ${SUB_BATCH_SIZE}`);
           
           const processBatch = () => {
             const batchStartTime = Date.now();
-            const bstartIdx = currentBatch * 4;
-            const bendIdx = Math.min(bstartIdx + 4, batchKeys.length);
+            const bstartIdx = currentBatch * SUB_BATCH_SIZE;
+            const bendIdx = Math.min(bstartIdx + SUB_BATCH_SIZE, batchKeys.length);
             const batchedKeys = batchKeys.slice(bstartIdx, bendIdx);
             
             console.log(`[MR-${job_id}] Node ${nodeId}: Processing sub-batch ${currentBatch + 1}/${totalBatches} with ${batchedKeys.length} keys`);
@@ -689,7 +306,7 @@ Node Statistics:`);
                 
                 const mapDuration = Date.now() - mapStartTime;
                 const finalMemUsage = process.memoryUsage();
-                console.log(`[MR-${job_id}] Node ${nodeId}: Map phase completed in ${mapDuration}ms. Results: ${mapResults.length}, Memory: heap=${Math.round(finalMemUsage.heapUsed/1024/1024)}MB`);
+                console.log(`[MR-${job_id}] Node ${nodeId}: Map phase completed in ${mapDuration}ms. Results: ${mapResults.length},  Memory: heap=${Math.round(finalMemUsage.heapUsed/1024/1024)}MB/${Math.round(finalMemUsage.heapTotal/1024/1024)}MB (${Math.round((finalMemUsage.heapUsed/finalMemUsage.heapTotal)*100)}% used)`);
                 
                 service.notify({
                   phase: "MAP", 
@@ -718,7 +335,7 @@ Node Statistics:`);
                     let res = mapper(key, val);
                     const mapDurationMs = Date.now() - mapStartMs;
                     
-                    // NEW: Add to processed keys list
+                    // Add to processed keys list
                     processedKeys.push(key);
                     
                     if (mapDurationMs > 500) { // Log slow mapper operations
@@ -746,6 +363,8 @@ Node Statistics:`);
                   
                   mapResults = mapResults.concat(batchResults);
                   currentBatch++;
+
+                  // console.log("[MR-%s] Node %s: Processed %s keys in this sub-batch, total results so far: %s, final result: %s", job_id, nodeId, keysProcessed, mapResults.length, JSON.stringify(batchResults));
                   
                   if (currentBatch < totalBatches) {
                     // Process next batch
@@ -761,7 +380,7 @@ Node Statistics:`);
                       
                       const mapDuration = Date.now() - mapStartTime;
                       const finalMemUsage = process.memoryUsage();
-                      console.log(`[MR-${job_id}] Node ${nodeId}: Map phase completed in ${mapDuration}ms. Results: ${mapResults.length}, Processed keys: ${processedKeys.length}, Memory: heap=${Math.round(finalMemUsage.heapUsed/1024/1024)}MB, total=${Math.round(finalMemUsage.heapTotal/1024/1024)}MB (${Math.round((finalMemUsage.heapUsed/finalMemUsage.heapTotal)*100)}% used)`);
+                      console.log(`[MR-${job_id}] Node ${nodeId}: Map phase completed in ${mapDuration}ms. Results: ${mapResults.length}, Processed keys: ${processedKeys.length}, Memory: heap=${Math.round(finalMemUsage.heapUsed/1024/1024)}MB/${Math.round(finalMemUsage.heapTotal/1024/1024)}MB (${Math.round((finalMemUsage.heapUsed/finalMemUsage.heapTotal)*100)}% used)`);
                       
                       service.notify({
                         phase: "MAP", 
@@ -789,435 +408,343 @@ Node Statistics:`);
     /**
      * Shuffle function with enhanced tracking
      */
-    /**
- * Shuffle function with comprehensive memory tracking and advanced logging
- */
-const shuffle = (config, callback) => {
-  const gid = config.gid;
-  const jid = config.jid;
-  // Reduce batch size to help with memory pressure
-  const SHUFFLE_BATCH_SIZE = 500; // Reduced from 1000
-  const nodeId = global.nodeConfig.port;
-  
-  // Memory tracking
-  const shuffleStartTime = Date.now();
-  const initialMemUsage = process.memoryUsage();
-  console.log(`[MR-${jid}] Node ${nodeId}: SHUFFLE PHASE STARTING - Memory: heap=${Math.round(initialMemUsage.heapUsed/1024/1024)}MB/${Math.round(initialMemUsage.heapTotal/1024/1024)}MB (${Math.round((initialMemUsage.heapUsed/initialMemUsage.heapTotal)*100)}% used)`);
-  
-  // Detailed tracking variables
-  let entriesProcessed = 0;
-  let entriesSent = 0;
-  let targetsFound = 0;
-  let largestBatchSize = 0;
-  let largestBatchTarget = '';
-  const targetStats = {};
-  const phaseTimings = {
-    mapResultsRetrieval: 0,
-    nodeTargeting: 0,
-    batchSending: 0,
-    total: 0
-  };
-  const memorySnapshots = {
-    afterMapRetrieval: 0,
-    afterNodeTargeting: 0,
-    afterBatchSending: 0
-  };
-  
-  // Track errors
-  let errors = {
-    count: 0,
-    details: []
-  };
-  
-  // Get the start time for map results retrieval
-  const mapRetrievalStartTime = Date.now();
-  
-  distribution.local.routes.get(jid, (err, service) => {
-    if (err) {
-      console.error(`[MR-${jid}] Node ${nodeId}: Error getting service: ${err.message}`);
-      callback(err, null);
-      return;
-    }
-    
-    // Get map results from memory
-    const storageService = distribution.local.mem;
-    const mapResultName = "map@" + jid;
-    
-    storageService.get({key: mapResultName, gid: gid}, (err, mapResults) => {
-      // Track time to retrieve map results
-      phaseTimings.mapResultsRetrieval = Date.now() - mapRetrievalStartTime;
+    const shuffle = (config, callback) => {
+      const gid = config.gid;
+      const jid = config.jid;
+      // Reduce batch size to help with memory pressure
+      const SHUFFLE_BATCH_SIZE = 500;
+      const nodeId = global.nodeConfig.port;
       
-      if (err) {
-        console.error(`[MR-${jid}] Node ${nodeId}: Error retrieving map results: ${err.message}`);
-        errors.count++;
-        errors.details.push({phase: 'map_retrieval', error: err.message});
-      }
+      // Memory tracking
+      const shuffleStartTime = Date.now();
+      const initialMemUsage = process.memoryUsage();
+      console.log(`[MR-${jid}] Node ${nodeId}: SHUFFLE PHASE STARTING -  Memory: heap=${Math.round(initialMemUsage.heapUsed/1024/1024)}MB/${Math.round(initialMemUsage.heapTotal/1024/1024)}MB (${Math.round((initialMemUsage.heapUsed/initialMemUsage.heapTotal)*100)}% used)`);
       
-      if (!mapResults || mapResults.length === 0) {
-        console.log(`[MR-${jid}] Node ${nodeId}: No map results found for gid ${gid} and job ${jid}. Cannot shuffle.`);
-        service.notify({
-          phase: "SHUFFLE", 
-          status: "COMPLETED", 
-          gid: gid, 
-          jid: jid,
-          nodeId: nodeId,
-          noKeysToProcess: true,
-          shuffleStats: {
-            entriesProcessed: 0,
-            entriesSent: 0,
-            targetsFound: 0,
-            errors: errors
-          }
-        }, callback);
-        return;
-      }
+      // Detailed tracking variables
+      let entriesProcessed = 0;
+      let entriesSent = 0;
+      let targetsFound = 0;
+      const targetStats = {};
       
-      // Memory snapshot after retrieving map results
-      const memAfterRetrieval = process.memoryUsage();
-      memorySnapshots.afterMapRetrieval = memAfterRetrieval.heapUsed;
+      // Track errors
+      let errors = {
+        count: 0,
+        details: []
+      };
       
-      console.log(`[MR-${jid}] Node ${nodeId}: Retrieved ${mapResults.length} map results in ${phaseTimings.mapResultsRetrieval}ms`);
-      console.log(`[MR-${jid}] Node ${nodeId}: Memory after retrieval: heap=${Math.round(memAfterRetrieval.heapUsed/1024/1024)}MB (${Math.round((memAfterRetrieval.heapUsed - initialMemUsage.heapUsed)/1024/1024)}MB increase)`);
+      // Get the start time for map results retrieval
+      const mapRetrievalStartTime = Date.now();
       
-      // Sample and log the first few entries
-      const sampleSize = Math.min(2, mapResults.length);
-      if (sampleSize > 0) {
-        console.log(`[MR-${jid}] Node ${nodeId}: Sample of map results (${sampleSize} entries):`);
-        for (let i = 0; i < sampleSize; i++) {
-          const keys = Object.keys(mapResults[i]);
-          console.log(`  Entry ${i+1}: key=${keys[0]}, data size=${JSON.stringify(mapResults[i]).length} bytes`);
-        }
-      }
-      
-      entriesProcessed = mapResults.length;
-      
-      // Start node targeting phase
-      const nodeTargetingStartTime = Date.now();
-      
-      // Group results by target node to minimize network calls
-      distribution.local.groups.get(gid, (err, groupNodes) => {
+      distribution.local.routes.get(jid, (err, service) => {
         if (err) {
-          console.error(`[MR-${jid}] Node ${nodeId}: Error retrieving group nodes: ${err.message}`);
-          errors.count++;
-          errors.details.push({phase: 'group_retrieval', error: err.message});
+          console.error(`[MR-${jid}] Node ${nodeId}: Error getting service: ${err.message}`);
           callback(err, null);
           return;
         }
-
-        const groupNodeCount = Object.keys(groupNodes).length;
-        console.log(`[MR-${jid}] Node ${nodeId}: Found ${groupNodeCount} group nodes for shuffling`);
         
-        // Calculate target node for each key
-        let nodeTargets = {};
-        let keyCounts = {}; // For logging key distribution
+        // Get map results from memory
+        const storageService = distribution.local.mem;
+        const mapResultName = "map@" + jid;
         
-        console.log(`[MR-${jid}] Node ${nodeId}: Starting to assign ${mapResults.length} entries to target nodes...`);
-        const targetingBatchSize = 5000;
-        const totalTargetingBatches = Math.ceil(mapResults.length / targetingBatchSize);
-        
-        // Process targeting in smaller batches to reduce GC pressure
-        for (let batchIdx = 0; batchIdx < totalTargetingBatches; batchIdx++) {
-          const batchStart = batchIdx * targetingBatchSize;
-          const batchEnd = Math.min(batchStart + targetingBatchSize, mapResults.length);
+        storageService.get({key: mapResultName, gid: gid}, (err, mapResults) => {
+          const mapRetrievalDuration = Date.now() - mapRetrievalStartTime;
           
-          if (batchIdx > 0 && batchIdx % 5 === 0) {
-            console.log(`[MR-${jid}] Node ${nodeId}: Processed ${batchIdx} targeting batches (${batchStart}/${mapResults.length} entries)`);
+          if (err) {
+            console.error(`[MR-${jid}] Node ${nodeId}: Error retrieving map results: ${err.message}`);
+            errors.count++;
+            errors.details.push({phase: 'map_retrieval', error: err.message});
           }
           
-          for (let i = batchStart; i < batchEnd; i++) {
-            const entry = mapResults[i];
-            const key = Object.keys(entry)[0];
-            
-            // Get node configs and IDs
-            const nodeConfigs = Object.values(groupNodes);
-            const nids = nodeConfigs.map((nc) => distribution.util.id.getNID(nc));
-            
-            // Hash the key to determine target node
-            const kid = distribution.util.id.getID(key);
-            const targetNID = distribution.util.id.consistentHash(kid, nids);
-            const targetNode = nodeConfigs.find((nc) => distribution.util.id.getNID(nc) === targetNID);
-            
-            if (!targetNode) {
-              console.error(`[MR-${jid}] Node ${nodeId}: No target node found for key ${key}`);
-              continue;
-            }
-            
-            const targetNodeId = distribution.util.id.getSID(targetNode);
-            targetsFound++;
-            
-            // Track target statistics
-            if (!targetStats[targetNodeId]) {
-              targetStats[targetNodeId] = 0;
-            }
-            targetStats[targetNodeId]++;
-            
-            // Initialize arrays for this target
-            if (!nodeTargets[targetNodeId]) {
-              nodeTargets[targetNodeId] = [];
-              keyCounts[targetNodeId] = 0;
-            }
-            
-            // Add entry to target's batch
-            nodeTargets[targetNodeId].push({
-              key: key,
-              entry: entry,
-              jid: jid
-            });
-            
-            keyCounts[targetNodeId]++;
-          }
-        }
-        
-        // Track node targeting time
-        phaseTimings.nodeTargeting = Date.now() - nodeTargetingStartTime;
-        
-        // Memory snapshot after node targeting
-        const memAfterTargeting = process.memoryUsage();
-        memorySnapshots.afterNodeTargeting = memAfterTargeting.heapUsed;
-        
-        console.log(`[MR-${jid}] Node ${nodeId}: Completed node targeting in ${phaseTimings.nodeTargeting}ms`);
-        console.log(`[MR-${jid}] Node ${nodeId}: Memory after targeting: heap=${Math.round(memAfterTargeting.heapUsed/1024/1024)}MB (${Math.round((memAfterTargeting.heapUsed - memAfterRetrieval.heapUsed)/1024/1024)}MB change)`);
-        
-        // Find the largest batch for logging
-        Object.keys(nodeTargets).forEach(target => {
-          const batchSize = nodeTargets[target].length;
-          if (batchSize > largestBatchSize) {
-            largestBatchSize = batchSize;
-            largestBatchTarget = target;
-          }
-        });
-        
-        console.log(`[MR-${jid}] Node ${nodeId}: Largest batch: ${largestBatchSize} entries targeting node ${largestBatchTarget}`);
-        console.log(`[MR-${jid}] Node ${nodeId}: Key distribution across nodes: ${JSON.stringify(keyCounts)}`);
-        
-        // Start batch sending phase
-        const batchSendingStartTime = Date.now();
-        
-        // Process each target node's batch
-        const targetNodeIds = Object.keys(nodeTargets);
-        let nodesProcessed = 0;
-        
-        if (targetNodeIds.length === 0) {
-          console.log(`[MR-${jid}] Node ${nodeId}: No target nodes found for shuffling. Completing phase.`);
-          service.notify({
-            phase: "SHUFFLE", 
-            status: "COMPLETED", 
-            gid: gid, 
-            jid: jid,
-            nodeId: nodeId,
-            noKeysToProcess: true,
-            shuffleStats: {
-              entriesProcessed: entriesProcessed,
-              entriesSent: entriesSent,
-              targetsFound: targetsFound,
-              targetStats: targetStats,
-              errors: errors,
-              phaseTimings: phaseTimings,
-              memoryUsage: {
-                initial: Math.round(initialMemUsage.heapUsed/1024/1024),
-                afterMapRetrieval: Math.round(memorySnapshots.afterMapRetrieval/1024/1024),
-                afterNodeTargeting: Math.round(memorySnapshots.afterNodeTargeting/1024/1024)
-              }
-            }
-          }, callback);
-          return;
-        }
-        
-        // Track active transfers
-        let activeTransfers = 0;
-        const maxConcurrentTransfers = 2; // Limit concurrent transfers
-        
-        // Process nodes one by one to reduce memory pressure
-        function processNextNode(nodeIndex) {
-          if (nodeIndex >= targetNodeIds.length) {
-            // All nodes processed, wait for remaining transfers
-            if (activeTransfers === 0) {
-              completeShufflePhase();
-            }
-            return;
-          }
+          // console.log("[MR-%s] Node %s: Retrieved map results : %s", jid,  nodeId, JSON.stringify(mapResults))
           
-          const targetNodeId = targetNodeIds[nodeIndex];
-          const entries = nodeTargets[targetNodeId];
-          const targetNodeConfig = groupNodes[targetNodeId];
-          
-          console.log(`[MR-${jid}] Node ${nodeId}: Processing ${entries.length} entries for node ${targetNodeId}`);
-          
-          // Process entries in batches
-          let batchesProcessed = 0;
-          let entriesSentToThisNode = 0;
-          const totalBatches = Math.ceil(entries.length / SHUFFLE_BATCH_SIZE);
-          
-          // Process batches sequentially
-          function processNextBatch() {
-            if (batchesProcessed >= totalBatches) {
-              // All batches for this node processed
-              console.log(`[MR-${jid}] Node ${nodeId}: Completed sending ${entriesSentToThisNode} entries to node ${targetNodeId}`);
-              
-              // Free memory by clearing processed entries
-              nodeTargets[targetNodeId] = null;
-              
-              // Process next node
-              processNextNode(nodeIndex + 1);
-              return;
-            }
-            
-            // Check if we should wait due to too many active transfers
-            if (activeTransfers >= maxConcurrentTransfers) {
-              setTimeout(processNextBatch, 100);
-              return;
-            }
-            
-            const batchStartTime = Date.now();
-            const startIdx = batchesProcessed * SHUFFLE_BATCH_SIZE;
-            const endIdx = Math.min(startIdx + SHUFFLE_BATCH_SIZE, entries.length);
-            const batchEntries = entries.slice(startIdx, endIdx);
-            
-            console.log(`[MR-${jid}] Node ${nodeId}: Sending batch ${batchesProcessed+1}/${totalBatches} (${batchEntries.length} entries) to node ${targetNodeId}`);
-            
-            // Set timeout for this batch
-            const sendTimeout = setTimeout(() => {
-              console.error(`[MR-${jid}] Node ${nodeId}: TIMEOUT sending batch ${batchesProcessed+1} to ${targetNodeId}`);
-              errors.count++;
-              errors.details.push({
-                phase: 'batch_send_timeout',
-                targetNode: targetNodeId,
-                batchNumber: batchesProcessed+1,
-                entriesCount: batchEntries.length
-              });
-              
-              // Reduce active transfers count
-              activeTransfers--;
-              
-              // Continue with next batch despite timeout
-              batchesProcessed++;
-              processNextBatch();
-            }, 60000); // 60-second timeout
-            
-            // Track active transfers
-            activeTransfers++;
-            
-            // Send batch to target node
-            const batchData = {
-              entries: batchEntries,
-              jid: jid,
-              gid: gid
-            };
-            
-            const config = {
-              service: 'mem',
-              method: 'bulk_append',
-              node: targetNodeConfig
-            };
-            
-            // Log memory before send
-            if (batchesProcessed === 0) {
-              const memBeforeSend = process.memoryUsage();
-              console.log(`[MR-${jid}] Node ${nodeId}: Memory before first batch send: heap=${Math.round(memBeforeSend.heapUsed/1024/1024)}MB`);
-            }
-            
-            distribution.local.comm.send([batchData], config, (err, result) => {
-              // Clear timeout
-              clearTimeout(sendTimeout);
-              
-              // Decrease active transfers
-              activeTransfers--;
-              
-              // Handle errors
-              if (err) {
-                console.error(`[MR-${jid}] Node ${nodeId}: Error sending batch ${batchesProcessed+1} to node ${targetNodeId}: ${err.message}`);
-                errors.count++;
-                errors.details.push({
-                  phase: 'batch_send_error',
-                  targetNode: targetNodeId,
-                  batchNumber: batchesProcessed+1,
-                  error: err.message
-                });
-              } else {
-                // Update statistics
-                entriesSent += batchEntries.length;
-                entriesSentToThisNode += batchEntries.length;
-              }
-              
-              // Calculate batch duration
-              const batchDuration = Date.now() - batchStartTime;
-              batchesProcessed++;
-              
-              console.log(`[MR-${jid}] Node ${nodeId}: Batch ${batchesProcessed}/${totalBatches} for ${targetNodeId} completed in ${batchDuration}ms`);
-              
-              // Release references to help GC
-              batchEntries.length = 0;
-              
-              // Process next batch
-              processNextBatch();
-            });
-          }
-          
-          // Start processing first batch
-          processNextBatch();
-        }
-        
-        // Start processing first node
-        processNextNode(0);
-        
-        // Function to complete the shuffle phase
-        function completeShufflePhase() {
-          phaseTimings.batchSending = Date.now() - batchSendingStartTime;
-          phaseTimings.total = Date.now() - shuffleStartTime;
-          
-          // Memory snapshot after batch sending
-          const memAfterSending = process.memoryUsage();
-          memorySnapshots.afterBatchSending = memAfterSending.heapUsed;
-          
-          console.log(`[MR-${jid}] Node ${nodeId}: SHUFFLE COMPLETED in ${phaseTimings.total}ms`);
-          console.log(`[MR-${jid}] Node ${nodeId}: Final memory: heap=${Math.round(memAfterSending.heapUsed/1024/1024)}MB (${Math.round((memAfterSending.heapUsed - initialMemUsage.heapUsed)/1024/1024)}MB total change)`);
-          
-          // Clear mapped results to release memory
-          storageService.del({gid: gid, key: mapResultName}, (err, val) => {
-            if (err) {
-              console.error(`[MR-${jid}] Node ${nodeId}: Error deleting map results: ${err.message}`);
-              errors.count++;
-              errors.details.push({phase: 'cleanup', error: err.message});
-            } else {
-              console.log(`[MR-${jid}] Node ${nodeId}: Successfully deleted map results after shuffling`);
-            }
-            
-            // Force garbage collection if available
-            if (global.gc) {
-              global.gc();
-              const memAfterGC = process.memoryUsage();
-              console.log(`[MR-${jid}] Node ${nodeId}: Memory after forced GC: heap=${Math.round(memAfterGC.heapUsed/1024/1024)}MB (${Math.round((memAfterGC.heapUsed - memAfterSending.heapUsed)/1024/1024)}MB change)`);
-            }
-            
-            // Notify completion
+          if (!mapResults || mapResults.length === 0) {
+            console.log(`[MR-${jid}] Node ${nodeId}: No map results found for gid ${gid} and job ${jid}. Cannot shuffle.`);
             service.notify({
               phase: "SHUFFLE", 
               status: "COMPLETED", 
               gid: gid, 
               jid: jid,
               nodeId: nodeId,
-              noKeysToProcess: false,
+              noKeysToProcess: true,
               shuffleStats: {
-                entriesProcessed: entriesProcessed,
-                entriesSent: entriesSent,
-                targetsFound: targetsFound,
-                errors: errors,
-                phaseTimings: phaseTimings,
-                memoryUsage: {
-                  initial: Math.round(initialMemUsage.heapUsed/1024/1024),
-                  afterMapRetrieval: Math.round(memorySnapshots.afterMapRetrieval/1024/1024),
-                  afterNodeTargeting: Math.round(memorySnapshots.afterNodeTargeting/1024/1024),
-                  afterBatchSending: Math.round(memorySnapshots.afterBatchSending/1024/1024)
-                },
-                targetStats: targetStats
+                entriesProcessed: 0,
+                entriesSent: 0,
+                targetsFound: 0,
+                errors: errors
               }
             }, callback);
+            return;
+          }
+          
+          console.log(`[MR-${jid}] Node ${nodeId}: Retrieved ${mapResults.length} map results in ${mapRetrievalDuration}ms`);
+          
+          entriesProcessed = mapResults.length;
+          
+          // Group results by target node to minimize network calls
+          distribution.local.groups.get(gid, (err, groupNodes) => {
+            if (err) {
+              console.error(`[MR-${jid}] Node ${nodeId}: Error retrieving group nodes: ${err.message}`);
+              errors.count++;
+              errors.details.push({phase: 'group_retrieval', error: err.message});
+              callback(err, null);
+              return;
+            }
+
+            const groupNodeCount = Object.keys(groupNodes).length;
+            console.log(`[MR-${jid}] Node ${nodeId}: Found ${groupNodeCount} group nodes for shuffling`);
+            
+            // Calculate target node for each key
+            let nodeTargets = {};
+            let keyCounts = {}; // For logging key distribution
+            
+            console.log(`[MR-${jid}] Node ${nodeId}: Starting to assign ${mapResults.length} entries to target nodes...`);
+            
+            for (let i = 0; i < mapResults.length; i++) {
+              const entry = mapResults[i];
+              const key = Object.keys(entry)[0];
+              
+              // Get node configs and IDs
+              const nodeConfigs = Object.values(groupNodes);
+              const nids = nodeConfigs.map((nc) => distribution.util.id.getNID(nc));
+              
+              // Hash the key to determine target node
+              const kid = distribution.util.id.getID(key);
+              const targetNID = distribution.util.id.consistentHash(kid, nids);
+              const targetNode = nodeConfigs.find((nc) => distribution.util.id.getNID(nc) === targetNID);
+              
+              if (!targetNode) {
+                console.error(`[MR-${jid}] Node ${nodeId}: No target node found for key ${key}`);
+                continue;
+              }
+              
+              const targetNodeId = distribution.util.id.getSID(targetNode);
+              targetsFound++;
+              
+              // Track target statistics
+              if (!targetStats[targetNodeId]) {
+                targetStats[targetNodeId] = 0;
+              }
+              targetStats[targetNodeId]++;
+              
+              // Initialize arrays for this target
+              if (!nodeTargets[targetNodeId]) {
+                nodeTargets[targetNodeId] = [];
+                keyCounts[targetNodeId] = 0;
+              }
+              
+              // Add entry to target's batch
+              nodeTargets[targetNodeId].push({
+                key: key,
+                entry: entry,
+                jid: jid
+              });
+              
+              keyCounts[targetNodeId]++;
+            }
+            
+            console.log(`[MR-${jid}] Node ${nodeId}: Key distribution across nodes: ${JSON.stringify(keyCounts)}`);
+            
+            // Process each target node's batch
+            const targetNodeIds = Object.keys(nodeTargets);
+            
+            if (targetNodeIds.length === 0) {
+              console.log(`[MR-${jid}] Node ${nodeId}: No target nodes found for shuffling. Completing phase.`);
+              service.notify({
+                phase: "SHUFFLE", 
+                status: "COMPLETED", 
+                gid: gid, 
+                jid: jid,
+                nodeId: nodeId,
+                noKeysToProcess: true,
+                shuffleStats: {
+                  entriesProcessed: entriesProcessed,
+                  entriesSent: entriesSent,
+                  targetsFound: targetsFound,
+                  targetStats: targetStats,
+                  errors: errors
+                }
+              }, callback);
+              return;
+            }
+            
+            // Track active transfers
+            let activeTransfers = 0;
+            let completedNodes = 0;
+            const maxConcurrentTransfers = 2; // Limit concurrent transfers
+            
+            // Process nodes one by one to reduce memory pressure
+            function processNextNode(nodeIndex) {
+              if (nodeIndex >= targetNodeIds.length) {
+                // All nodes processed, wait for remaining transfers
+                if (activeTransfers === 0) {
+                  completeShufflePhase();
+                }
+                return;
+              }
+              
+              const targetNodeId = targetNodeIds[nodeIndex];
+              const entries = nodeTargets[targetNodeId];
+              const targetNodeConfig = groupNodes[targetNodeId];
+              
+              console.log(`[MR-${jid}] Node ${nodeId}: Processing ${entries.length} entries for node ${targetNodeId}`);
+              
+              // Process entries in batches
+              let batchesProcessed = 0;
+              let entriesSentToThisNode = 0;
+              const totalBatches = Math.ceil(entries.length / SHUFFLE_BATCH_SIZE);
+              
+              // Process batches sequentially
+              function processNextBatch() {
+                if (batchesProcessed >= totalBatches) {
+                  // All batches for this node processed
+                  console.log(`[MR-${jid}] Node ${nodeId}: Completed sending ${entriesSentToThisNode} entries to node ${targetNodeId}`);
+                  
+                  // Free memory by clearing processed entries
+                  nodeTargets[targetNodeId] = null;
+                  
+                  completedNodes++;
+                  
+                  // Process next node
+                  processNextNode(nodeIndex + 1);
+                  return;
+                }
+                
+                // Check if we should wait due to too many active transfers
+                if (activeTransfers >= maxConcurrentTransfers) {
+                  setTimeout(processNextBatch, 100);
+                  return;
+                }
+                
+                const batchStartTime = Date.now();
+                const startIdx = batchesProcessed * SHUFFLE_BATCH_SIZE;
+                const endIdx = Math.min(startIdx + SHUFFLE_BATCH_SIZE, entries.length);
+                const batchEntries = entries.slice(startIdx, endIdx);
+                
+                console.log(`[MR-${jid}] Node ${nodeId}: Sending batch ${batchesProcessed+1}/${totalBatches} (${batchEntries.length} entries) to node ${targetNodeId}`);
+                
+                // Set timeout for this batch
+                const sendTimeout = setTimeout(() => {
+                  console.error(`[MR-${jid}] Node ${nodeId}: TIMEOUT sending batch ${batchesProcessed+1} to ${targetNodeId}`);
+                  errors.count++;
+                  errors.details.push({
+                    phase: 'batch_send_timeout',
+                    targetNode: targetNodeId,
+                    batchNumber: batchesProcessed+1,
+                    entriesCount: batchEntries.length
+                  });
+                  
+                  // Reduce active transfers count
+                  activeTransfers--;
+                  
+                  // Continue with next batch despite timeout
+                  batchesProcessed++;
+                  processNextBatch();
+                }, 60000); // 60-second timeout
+                
+                // Track active transfers
+                activeTransfers++;
+                
+                // Send batch to target node
+                const batchData = {
+                  entries: batchEntries,
+                  jid: jid,
+                  gid: gid
+                };
+                
+                const config = {
+                  service: 'mem',
+                  method: 'bulk_append',
+                  node: targetNodeConfig
+                };
+                
+                distribution.local.comm.send([batchData], config, (err, result) => {
+                  // Clear timeout
+                  clearTimeout(sendTimeout);
+                  
+                  // Decrease active transfers
+                  activeTransfers--;
+                  
+                  // Handle errors
+                  if (err) {
+                    console.error(`[MR-${jid}] Node ${nodeId}: Error sending batch ${batchesProcessed+1} to node ${targetNodeId}: ${err.message}`);
+                    errors.count++;
+                    errors.details.push({
+                      phase: 'batch_send_error',
+                      targetNode: targetNodeId,
+                      batchNumber: batchesProcessed+1,
+                      error: err.message
+                    });
+                  } else {
+                    // Update statistics
+                    entriesSent += batchEntries.length;
+                    entriesSentToThisNode += batchEntries.length;
+                  }
+                  
+                  // Calculate batch duration
+                  const batchDuration = Date.now() - batchStartTime;
+                  batchesProcessed++;
+                  
+                  console.log(`[MR-${jid}] Node ${nodeId}: Batch ${batchesProcessed}/${totalBatches} for ${targetNodeId} completed in ${batchDuration}ms`);
+                  
+                  // Release references to help GC
+                  batchEntries.length = 0;
+                  
+                  // Process next batch
+                  processNextBatch();
+                });
+              }
+              
+              // Start processing first batch
+              processNextBatch();
+            }
+            
+            // Start processing first node
+            processNextNode(0);
+            
+            // Function to complete the shuffle phase
+            function completeShufflePhase() {
+              const shuffleDuration = Date.now() - shuffleStartTime;
+              
+              console.log(`[MR-${jid}] Node ${nodeId}: SHUFFLE COMPLETED in ${shuffleDuration}ms`);
+              
+              // Clear mapped results to release memory
+              storageService.del({gid: gid, key: mapResultName}, (err, val) => {
+                if (err) {
+                  console.error(`[MR-${jid}] Node ${nodeId}: Error deleting map results: ${err.message}`);
+                  errors.count++;
+                  errors.details.push({phase: 'cleanup', error: err.message});
+                } else {
+                  console.log(`[MR-${jid}] Node ${nodeId}: Successfully deleted map results after shuffling`);
+                }
+                
+                // Force garbage collection if available
+                if (global.gc) {
+                  global.gc();
+                  const memAfterGC = process.memoryUsage();
+                  console.log(`[MR-${jid}] Node ${nodeId}: Memory after forced GC: heap=${Math.round(memAfterGC.heapUsed/1024/1024)}MB`);
+                }
+                
+                // Notify completion
+                service.notify({
+                  phase: "SHUFFLE", 
+                  status: "COMPLETED", 
+                  gid: gid, 
+                  jid: jid,
+                  nodeId: nodeId,
+                  noKeysToProcess: false,
+                  shuffleStats: {
+                    entriesProcessed: entriesProcessed,
+                    entriesSent: entriesSent,
+                    targetsFound: targetsFound,
+                    errors: errors
+                  }
+                }, callback);
+              });
+            }
           });
-        }
+        });
       });
-    });
-  });
-};
+    };
 
     /**
      * Reduce function with enhanced tracking
@@ -1229,7 +756,7 @@ const shuffle = (config, callback) => {
       
       const reduceStartTime = Date.now();
       const initialMemUsage = process.memoryUsage();
-      console.log(`[MR-${job_id}] Node ${nodeId}: Starting reduce phase. Memory: heap=${Math.round(initialMemUsage.heapUsed/1024/1024)}MB`);
+      console.log(`[MR-${job_id}] Node ${nodeId}: Starting reduce phase. Memory: heap=${Math.round(initialMemUsage.heapUsed/1024/1024)}MB/${Math.round(initialMemUsage.heapTotal/1024/1024)}MB (${Math.round((initialMemUsage.heapUsed/initialMemUsage.heapTotal)*100)}% used)`);
       
       // Tracking variables
       let keysProcessed = 0;
@@ -1285,8 +812,6 @@ const shuffle = (config, callback) => {
             const endIdx = Math.min(startIdx + REDUCE_BATCH_SIZE, reduceKeys.length);
             const batchKeys = reduceKeys.slice(startIdx, endIdx);
             
-            console.log(`[MR-${job_id}] Node ${nodeId}: Processing reduce batch ${currentBatch+1}/${totalBatches} with ${batchKeys.length} keys`);
-            
             let batchResults = [];
             let keysProcessed = 0;
             let batchTotalValues = 0;
@@ -1322,11 +847,19 @@ const shuffle = (config, callback) => {
               
               if (keysProcessed === batchKeys.length) {
                 // Add batch results to total results
-                const batchDuration = Date.now() - batchStartTime;
-                console.log(`[MR-${job_id}] Node ${nodeId}: Reduce batch ${currentBatch+1}/${totalBatches} completed in ${batchDuration}ms. Processed ${keysProcessed} keys with ${batchTotalValues} total values. Slow keys: ${batchSlowKeys}`);
-                
                 reduceResults = reduceResults.concat(batchResults);
                 currentBatch++;
+
+                // console.log("[MR-%s] Node %s: Processed batch %s/%s for reduce phase with %s results, total values: %s, slow keys in this batch: %s, and results: ",
+                //   job_id, 
+                //   nodeId, 
+                //   currentBatch, 
+                //   totalBatches, 
+                //   batchResults.length, 
+                //   batchTotalValues,
+                //   batchSlowKeys,
+                //   JSON.stringify(batchResults) // For debugging purposes
+                // );
                 
                 if (currentBatch < totalBatches) {
                   // Process next batch
@@ -1342,7 +875,7 @@ const shuffle = (config, callback) => {
                     
                     const reduceDuration = Date.now() - reduceStartTime;
                     const finalMemUsage = process.memoryUsage();
-                    console.log(`[MR-${job_id}] Node ${nodeId}: Reduce phase completed in ${reduceDuration}ms. Results: ${reduceResults.length}, Values processed: ${totalValues}, Memory: heap=${Math.round(finalMemUsage.heapUsed/1024/1024)}MB`);
+                    // console.log(`[MR-${job_id}] Node ${nodeId}: Reduce phase completed in ${reduceDuration}ms. Results: ${reduceResults.length}, Values processed: ${totalValues}, Memory: heap=${Math.round(finalMemUsage.heapUsed/1024/1024)}MB`);
                     
                     service.notify({
                       phase: "REDUCE", 
@@ -1381,13 +914,18 @@ const shuffle = (config, callback) => {
       mapper: mapper,
       reducer: reducer,
       shuffle: shuffle,
-      reduce: reduce
+      reduce: reduce,
+      // Add configuration info for debugging
+      config: {
+        batchInfo: batchInfo,
+        contextGid: context.gid,
+        batchSize: batchSize,
+        batchIndex: batchIndex
+      }
     };
-
-    
     
     // Register the service on all nodes in the group
-    console.log(`[MR-${mrId}] EXEC STARTS on node ${global.nodeConfig.port}, with ${keys.length} keys`);
+    console.log(`[MR-${mrId}] EXEC STARTS on node ${global.nodeConfig.port}, with batch size ${batchSize}`);
     
     distribution[context.gid].routes.put(mrServiceObject, mrServiceName, (err, res) => {
       if (err) {
@@ -1396,59 +934,30 @@ const shuffle = (config, callback) => {
         return;
       }
 
-      console.log(`[MR-${mrId}] Service registered successfully, starting map phase for batch 0/${num_batches}`);
-      checkpointManager.load((err, checkpoint) => {
-        if (!err && checkpoint) {
-          console.log(`[MR-${mrId}] Resuming from checkpoint at batch ${checkpoint.state.batch_num}`);
-          
-          // Restore saved state
-          state_dict = checkpoint.state;
-          keyTrackingMap = checkpoint.keyTrackingMap;
-          
-          // Restore collected results
-          if (checkpoint.partialResults && checkpoint.partialResults.length > 0) {
-            console.log(`[MR-${mrId}] Restored ${checkpoint.partialResults.length} partial results`);
-            results = checkpoint.partialResults;
-          }
-          
-          // Continue from the current batch
-          console.log(`[MR-${mrId}] Continuing MapReduce from batch ${state_dict.batch_num}/${state_dict.num_batches}`);
-          
-          // Start from the current phase
-          const setupConfig = {
-            gid: context.gid,
-            jid: mrServiceName,
-            keys: keys,
-            batch_num: state_dict.batch_num,
-            batch_size: BATCH_SIZE
-          };
-          
-          distribution[context.gid].comm.send([setupConfig], {gid: 'local', service: mrServiceName, method: state_dict.phase.toLowerCase()}, (e, v) => {
-            if (e) {
-              console.error(`[MR-${mrId}] Error resuming job: ${e.message}`);
-            }
-          });
-        } else {
-          // No checkpoint found, start fresh
-          console.log(`[MR-${mrId}] Starting new MapReduce job with ${keys.length} keys`);
-          
-          const setupConfig = {
-            gid: context.gid,
-            jid: mrServiceName,
-            keys: keys,
-            batch_num: state_dict.batch_num,
-            batch_size: BATCH_SIZE
-          };
+      console.log(`[MR-${mrId}] Service registered successfully, starting map phase for batch ${batchInfo.current}/${batchInfo.total}`);
+      
+      // Start with MAP phase with a small delay to ensure service registration is complete
+      setTimeout(() => {
+        console.log(`[MR-${mrId}] Starting map phase after service registration`);
+        
+        const setupConfig = {
+          gid: context.gid,
+          jid: mrServiceName,
+          batch_index: batchIndex,
+          batch_size: batchSize
+        };
             
-          distribution[context.gid].comm.send([setupConfig], {gid: 'local', service: mrServiceName, method: 'map'}, (e, v) => {
-            if (e) {
-              console.error(`[MR-${mrId}] Error starting map phase: ${e.message}`);
-            }
-          });
-        }
-      });
-      
-      
+        distribution[context.gid].comm.send([setupConfig], {gid: 'local', service: mrServiceName, method: 'map'}, (e, v) => {
+           if (e && !isEmptyObject(e)) {
+            // Handle the error gracefully, log it and return
+            console.error(`[MR-${mrId}] Error starting map phase:`, e);
+            console.error(`[MR-${mrId}] Setup config:`, JSON.stringify(setupConfig, null, 2));
+            cb(e, null); // Report the error back to the caller
+          } else {
+            console.log(`[MR-${mrId}] Map phase started successfully`);
+          }
+        });
+      }, 500); // 500ms delay
     });
   }
 

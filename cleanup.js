@@ -1,8 +1,8 @@
 // const { node } = require("@brown-ds/distribution");
 const distribution = require("./config.js");
 
-const n1 = { ip: "127.0.0.1", port: 7110 };
-const n2 = { ip: "127.0.0.1", port: 7111 };
+const n1 = { ip: "127.0.0.1", port: 7118 };
+const n2 = { ip: "127.0.0.1", port: 7119 };
 const n3 = { ip: "127.0.0.1", port: 7112 };
 const n4 = { ip: '127.0.0.1', port: 7113 };
 const n5 = { ip: '127.0.0.1', port: 7114 };
