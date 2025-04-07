@@ -85,6 +85,8 @@ function mr(config) {
         return `[MR-${mrId}][${phase}][NODE:${nodeId}][${batchInfo}]${subBatchInfo}`;
       }
 
+      console.log(`[MR-${mrId}] Received notification for phase ${config.phase} from node ${config.nodeId}. Status: ${config.status}`);
+
       // Get the local group node count
       distribution.local.groups.get(config.gid, (err, group) => {
         if (err) {
@@ -107,9 +109,6 @@ function mr(config) {
           );
           return;
         }
-
-        // Track node statistics
-        const nodeId = config.nodeId || "unknown";
         
         // Track processing stats for each phase
         if (config.phase === "MAP") {

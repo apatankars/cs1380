@@ -509,6 +509,7 @@ distribution.node.start(async (server) => {
         // Define the reducer function
         // This calculates TF-IDF for each word across all documents
         const reducer = function (word, values) {
+          console.log("Reducer processing word:", word);
           try {
             // Total number of documents
             const totalDocs = values.length; // Use the actual number of documents in your dataset, or set it dynamically
@@ -533,6 +534,7 @@ distribution.node.start(async (server) => {
             });
 
             // Return word with its TF-IDF scores across documents
+            console.log(`Reducer emitting word: ${word}, totalDocs: ${totalDocs}, scores:`, tfScores);
             return {
               word: word,
               documentFrequency: totalDocs,
