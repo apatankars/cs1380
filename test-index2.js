@@ -4,17 +4,18 @@ const fs = require("fs");
 const path = require("path");
 
 // Set up nodes for distributed processing
-const num_nodes = 8;
-const nodes = [
-  { ip: "3.144.96.104", port: 1234 },
-  { ip: "3.21.106.86", port: 1234 },
-  { ip: "3.148.233.41", port: 1234 },
-  { ip: "13.59.147.228", port: 1234 },
-  { ip: "3.148.221.252", port: 1234 },
-  { ip: "3.137.162.13", port: 1234 },
-  { ip: "3.138.138.167", port: 1234 },
-  { ip: "18.189.188.238", port: 1234 },
-];
+const num_nodes = 8; // Number of nodes to simulate
+const nodes = [];
+// const nodes = [
+//   { ip: "3.144.96.104", port: 1234 },
+//   { ip: "3.21.106.86", port: 1234 },
+//   { ip: "3.148.233.41", port: 1234 },
+//   { ip: "13.59.147.228", port: 1234 },
+//   { ip: "3.148.221.252", port: 1234 },
+//   { ip: "3.137.162.13", port: 1234 },
+//   { ip: "3.138.138.167", port: 1234 },
+//   { ip: "18.189.188.238", port: 1234 },
+// ];
 
 const nids = [];
 const testGroup = {};
@@ -28,15 +29,21 @@ function isEmptyObject(obj) {
   return obj && typeof obj === "object" && Object.keys(obj).length === 0;
 }
 
-for (let i = 0; i < num_nodes; i++) {
-  let nodeConfig = nodes[i];
-  nids.push(id.getNID(nodeConfig));
-
-  // Add node to both groups
-  const sid = id.getSID(nodeConfig);
-  testGroup[sid] = nodeConfig;
-  indexGroup[sid] = nodeConfig;
+for(let i = 0; i < num_nodes; i++) {
+    nodes.push({ ip: '127.0.0.1', port: 8110 + i });
+    nids.push(id.getNID(nodes[i]));
+    testGroup[id.getSID(nodes[i])] = nodes[i];
+    indexGroup[id.getSID(nodes[i])] = nodes[i];
 }
+// for (let i = 0; i < num_nodes; i++) {
+//   let nodeConfig = nodes[i];
+//   nids.push(id.getNID(nodeConfig));
+
+//   // Add node to both groups
+//   const sid = id.getSID(nodeConfig);
+//   testGroup[sid] = nodeConfig;
+//   indexGroup[sid] = nodeConfig;
+// }
 
 // Configuration
 const CONFIG = {
@@ -244,6 +251,41 @@ function createCheckpoint(batchIndex, successfulBatches, resultsDir) {
 distribution.node.start(async (server) => {
   PERF.startTime = Date.now();
   console.log("SETTING UP OPTIMIZED TF-IDF TEST NODE...");
+
+  // Helper function to spawn a node
+  const spawn_node = (node) =>
+    new Promise((resolve, reject) =>
+      distribution.local.status.spawn(node, (e, v) => {
+        console.log(
+          `Spawned node at ${node.ip}:${node.port} ${distribution.util.id.getNID(node)} with result:`,
+          e ? e : v
+        );
+        resolve(e, v);
+      })
+    );
+
+  // Helper function to stop a node
+  const stop_node = (node) =>
+    new Promise((resolve, reject) =>
+      distribution.local.comm.send(
+        [],
+        { service: "status", method: "stop", node: node },
+        (e, v) => resolve(e, v)
+      )
+    );
+
+    // Start the node
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      try {
+        await spawn_node(node);
+        console.log(`Node started at ${node.ip}:${node.port}`);
+      } catch (e) {
+        console.error(`Failed to start node at ${node.ip}:${node.port}`, e);
+        finish();
+        return;
+      }
+    }
 
   // Set up the TFIDF group
   distribution.local.groups.put(tfidfConfig, testGroup, (e, v) => {
@@ -509,7 +551,7 @@ distribution.node.start(async (server) => {
         // Define the reducer function
         // This calculates TF-IDF for each word across all documents
         const reducer = function (word, values) {
-          console.log("Reducer processing word:", word);
+          // console.log("Reducer processing word:", word);
           try {
             // Total number of documents
             const totalDocs = values.length; // Use the actual number of documents in your dataset, or set it dynamically
@@ -534,7 +576,7 @@ distribution.node.start(async (server) => {
             });
 
             // Return word with its TF-IDF scores across documents
-            console.log(`Reducer emitting word: ${word}, totalDocs: ${totalDocs}, scores:`, tfScores);
+            // console.log(`Reducer emitting word: ${word}, totalDocs: ${totalDocs}, scores:`, tfScores);
             return {
               word: word,
               documentFrequency: totalDocs,
@@ -1570,6 +1612,9 @@ distribution.node.start(async (server) => {
   // Cleanup function
   const finish = async () => {
     console.log("SHUTTING DOWN...");
+    for (const node in nodes) {
+      await stop_node(node);
+    }
     server.close();
   };
 });

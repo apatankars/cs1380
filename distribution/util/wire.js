@@ -9,6 +9,7 @@ const log = require('../util/log');
   The toAsync function transforms a synchronous function that returns a value into an asynchronous one,
   which accepts a callback as its final argument and passes the value to the callback.
 */
+global.toLocal = {};
 function toAsync(func) {
   log(`Converting function to async: ${func.name}: ${func.toString().replace(/\n/g, '|')}`);
 

@@ -7,8 +7,8 @@ const path = require('path');
 // Configuration - customize these values
 const SOURCE_GROUP_ID = "index";       // Group ID to read from
 const DESTINATION_GROUP_ID = "tfidf";  // Group ID to write to
-const BATCH_SIZE = 500;                // Number of keys to process in each batch (increased from 100)
-const CONCURRENT_KEYS = 50;            // Number of keys to process concurrently (increased from 10)
+const BATCH_SIZE = 500;                // Number of keys to process in each batch
+const CONCURRENT_KEYS = 50;            // Number of keys to process concurrently
 const METRICS_INTERVAL = 30000;        // Report metrics every 30 seconds (in milliseconds)
 const MAX_MEMORY_USAGE_PERCENT = 80;   // Maximum memory usage before triggering GC (percent)
 
@@ -21,14 +21,14 @@ const inNodes = [
 ];
 
 const outNodes = [
-  { ip: "3.144.96.104", port: 1234 },
-  { ip: "3.21.106.86", port: 1234 },
-  { ip: "3.148.233.41", port: 1234 },
-  { ip: "13.59.147.228", port: 1234 },
-  { ip: "3.148.221.252", port: 1234 },
-  { ip: "3.137.162.13", port: 1234 },
-  { ip: "3.138.138.167", port: 1234 },
-  { ip: "18.189.188.238", port: 1234 },
+  { ip: "127.0.0.1", port: 8110 },
+  { ip: "127.0.0.1", port: 8111 },
+  { ip: "127.0.0.1", port: 8112 },
+  { ip: "127.0.0.1", port: 8113 },
+  { ip: "127.0.0.1", port: 8114 },
+  { ip: "127.0.0.1", port: 8115 },
+  { ip: "127.0.0.1", port: 8116 },
+  { ip: "127.0.0.1", port: 8117 },
 ];
 
 // Create node groups
@@ -46,12 +46,14 @@ const perfStats = {
   errors: 0,
   lastReportTime: Date.now(),
   // Pause configuration
-  pauseInterval: 2000,      // Pause after every 1000 files (increased from 100)
-  pauseDuration: 5000,      // Pause for 5 seconds (reduced from 60 seconds)
+  pauseInterval: 2000,      // Pause after every 2000 files
+  pauseDuration: 5000,      // Pause for 5 seconds
   // Metrics timer
   metricsTimer: null,
   // Is the process currently paused
-  isPaused: false
+  isPaused: false,
+  // Track spawned nodes for teardown
+  spawnedNodes: []
 };
 
 // Helper function for checking memory usage
@@ -108,6 +110,52 @@ distribution.node.start((server) => {
     destGroup[sid] = nodeConfig;
     console.log(`Adding node ${nid} (${nodeConfig.ip}:${nodeConfig.port}) to destination group`);
   }
+
+  // Helper function to spawn a node - returns a proper Promise
+  const spawn_node = (node) => {
+    // Create a proper node identifier for logging
+    const nodeIdentifier = `${node.ip}:${node.port} (${id.getNID(node)})`;
+    
+    return new Promise((resolve, reject) => {
+      console.log(`Attempting to spawn node at ${nodeIdentifier}...`);
+      
+      distribution.local.status.spawn(node, (e, v) => {
+        if (e) {
+          console.error(`Failed to spawn node at ${nodeIdentifier}:`, e);
+          reject(e);
+        } else {
+          console.log(`Spawned node at ${nodeIdentifier} successfully`);
+          // Track this node for teardown
+          perfStats.spawnedNodes.push(node);
+          resolve(v);
+        }
+      });
+    });
+  };
+
+  // Helper function to stop a node
+  const stop_node = (node) => {
+    // Create a proper node identifier for logging
+    const nodeIdentifier = `${node.ip}:${node.port} (${id.getNID(node)})`;
+    
+    return new Promise((resolve, reject) => {
+      console.log(`Stopping node at ${nodeIdentifier}...`);
+      
+      distribution.local.comm.send(
+        [],
+        { service: "status", method: "stop", node: node },
+        (e, v) => {
+          if (e) {
+            console.error(`Error stopping node at ${nodeIdentifier}:`, e);
+            reject(e);
+          } else {
+            console.log(`Node at ${nodeIdentifier} stopped successfully`);
+            resolve(v);
+          }
+        }
+      );
+    });
+  };
 
   // Group configurations
   const sourceGroupConfig = { gid: SOURCE_GROUP_ID };
@@ -209,27 +257,7 @@ distribution.node.start((server) => {
     });
   }
 
-  function parseArticleData(rawString) {
-    try {
-      // First parse the outer JSON structure
-      const outerObject = JSON.parse(rawString);
-      
-      // Now parse the inner JSON string contained in the value property
-      if (outerObject && outerObject.type === "string" && outerObject.value) {
-        const innerObject = JSON.parse(outerObject.value);
-        return innerObject;
-      } else {
-        console.error("Unexpected data format");
-        return null;
-      }
-    } catch (error) {
-      console.error("Error parsing JSON:", error);
-      console.log("First 100 chars:", rawString.substring(0, 100));
-      return null;
-    }
-  }
 
-  
   // Process a single file using the distributed store service
   function processFile(fileInfo, callback) {
     const filePath = path.join(fileInfo.nodePath, fileInfo.fileName);
@@ -464,8 +492,62 @@ distribution.node.start((server) => {
     console.log("================================\n");
   }
   
+  // Sequential node spawning with proper error handling
+  async function spawnAllNodes() {
+    console.log("Spawning all nodes...");
+    
+    // All nodes (combine source and destination)
+    const allNodes = [...inNodes, ...outNodes];
+    
+    try {
+      // Spawn nodes sequentially to avoid potential race conditions
+      for (const node of allNodes) {
+        await spawn_node(node);
+      }
+      
+      console.log(`All ${allNodes.length} nodes spawned successfully!`);
+      
+      // Now set up the groups
+      setupGroups(() => {
+        console.log("All groups set up. Starting processing...");
+        processAllNodes();
+      });
+    } catch (error) {
+      console.error("Error during node spawning process:", error);
+      console.log(`Successfully spawned ${perfStats.spawnedNodes.length} out of ${allNodes.length} nodes before error occurred.`);
+      finish();
+    }
+  }
+  
+  // Properly stop all spawned nodes
+  async function stopAllNodes() {
+    console.log(`Stopping all spawned nodes (${perfStats.spawnedNodes.length} nodes)...`);
+    
+    try {
+      // Track successfully stopped nodes
+      let stoppedCount = 0;
+      let errorCount = 0;
+      
+      // Stop each node sequentially to avoid overwhelming the system
+      for (const node of perfStats.spawnedNodes) {
+        try {
+          await stop_node(node);
+          stoppedCount++;
+        } catch (nodeError) {
+          errorCount++;
+          console.error(`Failed to stop node at ${node.ip}:${node.port}: ${nodeError.message}`);
+          // Continue with other nodes even if one fails
+        }
+      }
+      
+      console.log(`Node stopping complete: ${stoppedCount} stopped successfully, ${errorCount} failed.`);
+    } catch (error) {
+      console.error("Error in stopAllNodes function:", error);
+    }
+  }
+  
   // Helper function to clean up
-  function finish() {
+  async function finish() {
     console.log("SHUTTING DOWN...");
     
     // Clear metrics timer if it's still running
@@ -474,15 +556,35 @@ distribution.node.start((server) => {
       perfStats.metricsTimer = null;
     }
     
+    // Stop all spawned nodes
+    await stopAllNodes();
+    
+    // Close the server
     server.close();
     console.log("Server closed. Script complete.");
+    
+    // Exit with appropriate code after a brief delay to allow for final log messages
+    setTimeout(() => {
+      process.exit(perfStats.errors > 0 ? 1 : 0);
+    }, 1000);
   }
   
-  // Execute the main flow
-  console.log("Setting up groups...");
-  
-  setupGroups(() => {
-    console.log("All groups set up. Starting processing...");
-    processAllNodes();
+  // Handle unexpected errors and termination
+  process.on('uncaughtException', async (error) => {
+    console.error('Uncaught exception:', error);
+    await finish();
   });
+  
+  process.on('SIGINT', async () => {
+    console.log('Received SIGINT signal. Shutting down gracefully...');
+    await finish();
+  });
+  
+  process.on('SIGTERM', async () => {
+    console.log('Received SIGTERM signal. Shutting down gracefully...');
+    await finish();
+  });
+  
+  // Start the process by spawning all nodes
+  spawnAllNodes();
 });
