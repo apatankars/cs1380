@@ -32,14 +32,14 @@ const DEFAULT_CONFIGS = {
     // { ip: "127.0.0.1", port: 7115 }
   ],
   outNodes: [
-    { ip: "127.0.0.1", port: 8110 },
-    { ip: "127.0.0.1", port: 8111 },
-    { ip: "127.0.0.1", port: 8112 },
-    { ip: "127.0.0.1", port: 8113 },
-    { ip: "127.0.0.1", port: 8114 },
-    { ip: "127.0.0.1", port: 8115 },
-    { ip: "127.0.0.1", port: 8116 },
-    { ip: "127.0.0.1", port: 8117 }
+    { ip: "127.0.0.1", port: 8001 },
+    { ip: "127.0.0.1", port: 8002 },
+    { ip: "127.0.0.1", port: 8003 },
+    // { ip: "127.0.0.1", port: 8113 },
+    // { ip: "127.0.0.1", port: 8114 },
+    // { ip: "127.0.0.1", port: 8115 },
+    // { ip: "127.0.0.1", port: 8116 },
+    // { ip: "127.0.0.1", port: 8117 }
   ],
   // Add any additional node configurations here
   additionalNodes: [

@@ -34,6 +34,7 @@ const store = require('./store');
 /* Map-Reduce Service */
 const mr = require('./mr');
 
+const indexer = require('./indexer');
 
 module.exports = {
   comm: comm,
@@ -44,4 +45,5 @@ module.exports = {
   mem: mem,
   store: store,
   mr: mr,
+  indexer: indexer
 };

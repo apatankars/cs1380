@@ -280,51 +280,6 @@ function append(state, configuration, callback) {
   }
 }
 
-// function bulk_append(data, callback) {
-//   const entries = data.entries;
-//   const jid = data.jid;
-//   const gid = data.gid || 'local';
-  
-//   const nodeConfig = global.nodeConfig;
-//   const nodeID = util.id.getNID(nodeConfig);
-//   const shuffleResultName = "reduce@" + jid;
-//   const groupDir = path.join('store', nodeID, gid);
-//   const filePath = path.join(groupDir, sanitizeKey(shuffleResultName) + '.json');
-  
-//   // Create directory if needed
-//   fs.mkdirSync(groupDir, { recursive: true });
-  
-//   // Read existing data or create new object
-//   let results = {};
-//   if (fs.existsSync(filePath)) {
-//     try {
-//       const data = fs.readFileSync(filePath, 'utf8');
-//       const parsed = JSON.parse(data);
-//       results = util.deserialize(parsed);
-//     } catch (error) {
-//       console.error(`Error reading shuffle results: ${error.message}`);
-//     }
-//   }
-  
-//   // Process all entries
-//   entries.forEach(entry => {
-//     const key = entry.key;
-//     const value = entry.entry[key];
-    
-//     if (!results[key]) {
-//       results[key] = value;
-//     } else if (Array.isArray(results[key])) {
-//       results[key].push(value);
-//     } else {
-//       results[key] = [results[key], value];
-//     }
-//   });
-  
-//   // Write results back to file
-//   const serialized = util.serialize(results);
-//   fs.writeFileSync(filePath, JSON.stringify(serialized));
-//   callback(null, results);
-// }
 
 function bulk_append(data, callback) {
   const prefixBatches = data.prefixBatches || [];
@@ -347,8 +302,7 @@ function bulk_append(data, callback) {
       const filePath = path.join(groupDir, sanitizeKey(`prefix-${prefix}`) + '.json');
       
       // For debugging
-      console.log("STRIPPING KEY: ", `prefix-${prefix}`);
-      console.log("GETTING FROM THE FILEPATH: ", filePath);
+      console.log("Processing prefix batch:", prefix, "with", Object.keys(prefixData).length, "terms");
       
       // Read existing data for this prefix
       let existingData = {};
@@ -357,18 +311,17 @@ function bulk_append(data, callback) {
           const fileContent = fs.readFileSync(filePath, 'utf8');
           const parsed = JSON.parse(fileContent);
           existingData = util.deserialize(parsed);
-          console.log("EXISTING DATA: ", existingData);
         } catch (error) {
-          console.error(`Error reading prefix data: ${error.message}`);
+          console.error(`Error reading prefix data for ${prefix}: ${error.message}`);
         }
       }
       
-      // Merge new data with existing data - FIXED ALGORITHM
+      // Merge new data with existing data - ENHANCED ALGORITHM
       for (const term in prefixData) {
         // If term doesn't exist yet in our index, initialize it
         if (!existingData[term]) {
           existingData[term] = {
-            df: 0, // Start with 1 - ONE document contains this term
+            df: 0, // Will be incremented below
             postings: {}
           };
         }
@@ -382,68 +335,55 @@ function bulk_append(data, callback) {
             existingData[term].df += 1;
           }
           
-          // Update posting for this document
+          // Create or update posting for this document with all enhanced data
           existingData[term].postings[docId] = {
+            // Basic term frequency
             tf: docEntry.tf,
+            
+            // Enhanced ranking factors if available
+            ranking: docEntry.ranking || {
+              tf: docEntry.tf,
+              taxonomyBoost: 1.0,
+              binomialBoost: 1.0,
+              positionBoost: 1.0,
+              score: docEntry.tf // Default to tf if score not calculated
+            },
+            
+            // Taxonomy information if available
+            taxonomyLevel: docEntry.taxonomyLevel || null,
+            isBinomial: docEntry.isBinomial || false,
+            
+            // Page metadata if available
+            pageInfo: docEntry.pageInfo || {},
+            
+            // Always update timestamp
             timestamp: Date.now()
           };
         }
       }
       
-      // For debugging
-      console.log("FOUND PREFIX: ", JSON.stringify(existingData, null, 2));
-      
       // Write the updated data back
       const serialized = util.serialize(existingData);
       fs.writeFileSync(filePath, JSON.stringify(serialized));
       
+      // Return basic metrics about the operation
       results[prefix] = { 
-        termsProcessed: Object.keys(prefixData).length 
+        termsProcessed: Object.keys(prefixData).length,
+        totalTermsStored: Object.keys(existingData).length
       };
     }
     
-    callback(null, results);
+    // Return overall operation results
+    callback(null, {
+      status: 'success',
+      processingTime: Date.now(), // For timing reference
+      results: results,
+      totalPrefixesProcessed: prefixBatches.length
+    });
   } catch (error) {
     console.error("Error in bulk_append:", error);
     callback(error, null);
   }
 }
-
-// Helper function to merge index data
-// function mergeIndexData(existing, newData) {
-//   const result = JSON.parse(JSON.stringify(existing)); // Deep copy
-  
-//   // Process each term in the new data
-//   Object.entries(newData).forEach(([term, postings]) => {
-//     if (!result[term]) {
-//       // Term doesn't exist yet, add it with document frequency of 1
-//       result[term] = {
-//         df: 1,
-//         postings: {}
-//       };
-      
-//       // Add the document postings
-//       postings.forEach(posting => {
-//         result[term].postings[posting.url] = {
-//           tf: posting.tf
-//         };
-//       });
-//     } else {
-//       // Term exists, update it
-//       postings.forEach(posting => {
-//         if (!result[term].postings[posting.url]) {
-//           // Document not indexed for this term yet
-//           result[term].df += 1;
-//         }
-//         // Add or update the posting
-//         result[term].postings[posting.url] = {
-//           tf: posting.tf
-//         };
-//       });
-//     }
-//   });
-  
-//   return result;
-// }
 
 module.exports = {put, get, getGroupKeys, del, append, bulk_append};
