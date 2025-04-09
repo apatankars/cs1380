@@ -254,36 +254,28 @@ function index(configuration, callback) {
         });
       }
       
-      // Calculate kingdom and family for special weighting
       const kingdom = taxonomyInfo['kingdom'] || '';
       const family = taxonomyInfo['family'] || '';
       
-      // Process words and count occurrences
       const wordCounts = new Map();
       const totalWords = words.length;
       
-      // Process all words in a single pass
       for (const word of words) {
-        // Skip words with 2 or fewer characters
+
         if (word.length <= 2) continue;
-        
-        // Normalize to lowercase for consistency
+
         const cleanWord = word.toLowerCase();
         
-        // Skip if the word is in the stop list - O(1) lookup with Set
         if (stopWords.has(cleanWord)) continue;
         
-        // Filter out words containing any non-alphabetic characters
         if (!alphaOnlyPattern.test(cleanWord)) continue;
         
-        // Count the word occurrence
         wordCounts.set(cleanWord, (wordCounts.get(cleanWord) || 0) + 1);
       }
       
       console.log(`Document ID: ${docId}, Total words processed: ${totalWords}, Total unique terms: ${wordCounts.size}`);
       metrics.totalTerms = wordCounts.size;
-      
-      // Get nodes information for distribution
+
       distribution.local.groups.get('index', (err, group) => {
         if (err || !group) {
           console.log(`Failed to get 'index' group: ${err ? err.message : 'Group not found'}`);
@@ -293,7 +285,6 @@ function index(configuration, callback) {
         const nodes = Object.values(group);
         const nids = nodes.map(node => distribution.util.id.getNID(node));
         
-        // Create maps for grouping
         const prefixGroups = new Map(); // prefix -> terms
         const nodeToPrefix = new Map(); // node -> prefixes
         
@@ -308,7 +299,6 @@ function index(configuration, callback) {
         
         metrics.totalPrefixes = prefixGroups.size;
         
-        // Second pass: Assign prefixes to nodes
         for (const [prefix, terms] of prefixGroups) {
           const chosenNode = getChosenNode(prefix, nids, nodes);
           if (!nodeToPrefix.has(chosenNode)) {
@@ -317,18 +307,15 @@ function index(configuration, callback) {
           nodeToPrefix.get(chosenNode).set(prefix, terms);
         }
         
-        // Third pass: Prepare data for each node and send it
         let completedBatches = 0;
         let totalBatches = 0;
         
-        // Count total batches first
         for (const [node, prefixes] of nodeToPrefix) {
           if (prefixes.size > 0) {
             totalBatches++;
           }
         }
         
-        // If no batches to send, return immediately
         if (totalBatches === 0) {
           metrics.processingEndTime = Date.now();
           return callback(null, {
@@ -343,7 +330,6 @@ function index(configuration, callback) {
           });
         }
         
-        // Process each node's data
         for (const [node, prefixes] of nodeToPrefix) {
           const nodeId = distribution.util.id.getNID(node);
           const nodePrefixBatches = [];
