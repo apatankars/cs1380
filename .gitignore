@@ -4,11 +4,12 @@ package-lock.json
 checkpoints/
 
 tfidf-results/
-
 tfidf-logs/
 
-scrap.js
-testmr.js
+scrap/
+search/
+store/
+
 
 
 # in case a student adds an ssh key to the repo
