@@ -4,6 +4,7 @@
  * This script gracefully terminates distribution nodes.
  * It can be configured to stop any list of nodes specified in the configuration.
  */
+
 const distribution = require("./config.js");
 const fs = require('fs');
 const path = require('path');
@@ -25,10 +26,10 @@ const CONFIG = {
 // Default node configurations if not using a config file
 const DEFAULT_CONFIGS = {
   inNodes: [
-    { ip: "127.0.0.1", port: 7112 },
-    { ip: "127.0.0.1", port: 7113 },
-    { ip: "127.0.0.1", port: 7114 },
-    { ip: "127.0.0.1", port: 7115 }
+    // { ip: "127.0.0.1", port: 7112 },
+    // { ip: "127.0.0.1", port: 7113 },
+    // { ip: "127.0.0.1", port: 7114 },
+    // { ip: "127.0.0.1", port: 7115 }
   ],
   outNodes: [
     { ip: "127.0.0.1", port: 8110 },

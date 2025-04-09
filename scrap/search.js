@@ -1,4 +1,4 @@
-const distribution = require("./config.js");
+const distribution = require("../config.js");
 const id = distribution.util.id;
 const fs = require("fs");
 

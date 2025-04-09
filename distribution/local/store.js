@@ -112,6 +112,7 @@ function get(configuration, callback) {
 
   const groupDir = path.join('store', nodeID, gid);
   const filePath = path.join(groupDir, sanitizeKey(key) + '.json');
+  console.log("GETTING FROM THE FILEPATH: ", filePath)
 
   // check file existence
   if (!fs.existsSync(filePath)) {
@@ -279,51 +280,170 @@ function append(state, configuration, callback) {
   }
 }
 
+// function bulk_append(data, callback) {
+//   const entries = data.entries;
+//   const jid = data.jid;
+//   const gid = data.gid || 'local';
+  
+//   const nodeConfig = global.nodeConfig;
+//   const nodeID = util.id.getNID(nodeConfig);
+//   const shuffleResultName = "reduce@" + jid;
+//   const groupDir = path.join('store', nodeID, gid);
+//   const filePath = path.join(groupDir, sanitizeKey(shuffleResultName) + '.json');
+  
+//   // Create directory if needed
+//   fs.mkdirSync(groupDir, { recursive: true });
+  
+//   // Read existing data or create new object
+//   let results = {};
+//   if (fs.existsSync(filePath)) {
+//     try {
+//       const data = fs.readFileSync(filePath, 'utf8');
+//       const parsed = JSON.parse(data);
+//       results = util.deserialize(parsed);
+//     } catch (error) {
+//       console.error(`Error reading shuffle results: ${error.message}`);
+//     }
+//   }
+  
+//   // Process all entries
+//   entries.forEach(entry => {
+//     const key = entry.key;
+//     const value = entry.entry[key];
+    
+//     if (!results[key]) {
+//       results[key] = value;
+//     } else if (Array.isArray(results[key])) {
+//       results[key].push(value);
+//     } else {
+//       results[key] = [results[key], value];
+//     }
+//   });
+  
+//   // Write results back to file
+//   const serialized = util.serialize(results);
+//   fs.writeFileSync(filePath, JSON.stringify(serialized));
+//   callback(null, results);
+// }
+
 function bulk_append(data, callback) {
-  const entries = data.entries;
-  const jid = data.jid;
-  const gid = data.gid || 'local';
+  const prefixBatches = data.prefixBatches || [];
+  const gid = data.gid || 'index';
   
   const nodeConfig = global.nodeConfig;
   const nodeID = util.id.getNID(nodeConfig);
-  const shuffleResultName = "reduce@" + jid;
   const groupDir = path.join('store', nodeID, gid);
-  const filePath = path.join(groupDir, sanitizeKey(shuffleResultName) + '.json');
   
   // Create directory if needed
   fs.mkdirSync(groupDir, { recursive: true });
   
-  // Read existing data or create new object
-  let results = {};
-  if (fs.existsSync(filePath)) {
-    try {
-      const data = fs.readFileSync(filePath, 'utf8');
-      const parsed = JSON.parse(data);
-      results = util.deserialize(parsed);
-    } catch (error) {
-      console.error(`Error reading shuffle results: ${error.message}`);
-    }
-  }
+  const results = {};
   
-  // Process all entries
-  entries.forEach(entry => {
-    const key = entry.key;
-    const value = entry.entry[key];
+  try {
+    // Process each prefix batch
+    for (const batch of prefixBatches) {
+      const prefix = batch.prefix;
+      const prefixData = batch.data;
+      const filePath = path.join(groupDir, sanitizeKey(`prefix-${prefix}`) + '.json');
+      
+      // For debugging
+      console.log("STRIPPING KEY: ", `prefix-${prefix}`);
+      console.log("GETTING FROM THE FILEPATH: ", filePath);
+      
+      // Read existing data for this prefix
+      let existingData = {};
+      if (fs.existsSync(filePath)) {
+        try {
+          const fileContent = fs.readFileSync(filePath, 'utf8');
+          const parsed = JSON.parse(fileContent);
+          existingData = util.deserialize(parsed);
+          console.log("EXISTING DATA: ", existingData);
+        } catch (error) {
+          console.error(`Error reading prefix data: ${error.message}`);
+        }
+      }
+      
+      // Merge new data with existing data - FIXED ALGORITHM
+      for (const term in prefixData) {
+        // If term doesn't exist yet in our index, initialize it
+        if (!existingData[term]) {
+          existingData[term] = {
+            df: 0, // Start with 1 - ONE document contains this term
+            postings: {}
+          };
+        }
+        
+        // Process each document containing this term
+        for (const docEntry of prefixData[term]) {
+          const docId = docEntry.url;
+          
+          // Only increment df if this document wasn't already counted
+          if (!existingData[term].postings[docId]) {
+            existingData[term].df += 1;
+          }
+          
+          // Update posting for this document
+          existingData[term].postings[docId] = {
+            tf: docEntry.tf,
+            timestamp: Date.now()
+          };
+        }
+      }
+      
+      // For debugging
+      console.log("FOUND PREFIX: ", JSON.stringify(existingData, null, 2));
+      
+      // Write the updated data back
+      const serialized = util.serialize(existingData);
+      fs.writeFileSync(filePath, JSON.stringify(serialized));
+      
+      results[prefix] = { 
+        termsProcessed: Object.keys(prefixData).length 
+      };
+    }
     
-    if (!results[key]) {
-      results[key] = value;
-    } else if (Array.isArray(results[key])) {
-      results[key].push(value);
-    } else {
-      results[key] = [results[key], value];
-    }
-  });
-  
-  // Write results back to file
-  const serialized = util.serialize(results);
-  fs.writeFileSync(filePath, JSON.stringify(serialized));
-  callback(null, results);
+    callback(null, results);
+  } catch (error) {
+    console.error("Error in bulk_append:", error);
+    callback(error, null);
+  }
 }
 
+// Helper function to merge index data
+// function mergeIndexData(existing, newData) {
+//   const result = JSON.parse(JSON.stringify(existing)); // Deep copy
+  
+//   // Process each term in the new data
+//   Object.entries(newData).forEach(([term, postings]) => {
+//     if (!result[term]) {
+//       // Term doesn't exist yet, add it with document frequency of 1
+//       result[term] = {
+//         df: 1,
+//         postings: {}
+//       };
+      
+//       // Add the document postings
+//       postings.forEach(posting => {
+//         result[term].postings[posting.url] = {
+//           tf: posting.tf
+//         };
+//       });
+//     } else {
+//       // Term exists, update it
+//       postings.forEach(posting => {
+//         if (!result[term].postings[posting.url]) {
+//           // Document not indexed for this term yet
+//           result[term].df += 1;
+//         }
+//         // Add or update the posting
+//         result[term].postings[posting.url] = {
+//           tf: posting.tf
+//         };
+//       });
+//     }
+//   });
+  
+//   return result;
+// }
 
 module.exports = {put, get, getGroupKeys, del, append, bulk_append};

@@ -30,6 +30,9 @@ function toAsync(func) {
   return asyncFunc;
 }
 
+// function createRPC(func) {
+//   const funcID 
+// }
 let createRPC = require('@brown-ds/distribution/distribution/util/wire').createRPC;
 
 

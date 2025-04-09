@@ -35,6 +35,15 @@ function store(config) {
     });
   }
 
+  function stripPrefix(key) {
+    console.log("STRIPPING KEY: ", key)
+    if (typeof key === 'string' && key.startsWith('prefix-')) {
+      return key.substring(7); // Remove "prefix-" (7 characters)
+    }
+    console.log("STRIPPED KEY: ", key)
+    return key;
+  }
+
   /* For the distributed store service, the configuration will
           always be a string */
   return {
@@ -68,8 +77,9 @@ function store(config) {
         return;
       }
 
+
       // 3) Get the correct node
-      getChosenNode(configuration, (err, chosenNode) => {
+      getChosenNode(stripPrefix(configuration), (err, chosenNode) => {
         if (err) return callback(new Error('Could not find a node'), null);
 
         // 6) Send the key to the chosen node
