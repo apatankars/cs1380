@@ -1,6 +1,7 @@
 // distribution/local/crawler.js
 const fs = require('fs');
 const path = require('path');
+const parse = require('node-html-parser').parse;
 
 // Default callback
 const cb = (e, v) => {
@@ -162,7 +163,6 @@ function crawl_one(callback) {
           return response.text();
         })
         .then((html) => {
-          const parse = require('node-html-parser').parse;
           const root = parse(html);
 
           const biota = root.querySelector('table.infobox.biota');
@@ -323,7 +323,7 @@ function processCrawlResult(url, links_on_page, result, crawlStartTime, is_targe
   global.distribution.local.mem.get('crawled_links_map', (e, crawled_links_map) => {
     crawled_links_map.set(url, true);
 
-    global.distribution.local.mem.get('global_info', (e, v) => {
+    global.distribution.taxonomy.mem.get('global_info', (e, v) => {
       if (e) {
         console.error('Error getting global info:', e);
         return callback(null, { 
@@ -350,7 +350,7 @@ function processCrawlResult(url, links_on_page, result, crawlStartTime, is_targe
       
       // Process each link
       new_links.forEach(link => {
-        const remote = { node: get_nx(link), gid: 'local', service: 'crawler', method: 'add_link_to_crawl'};
+        const remote = { node: get_nx(link), service: 'crawler', method: 'add_link_to_crawl'};
         global.distribution.local.comm.send([link], remote, (e, v) => {
           processed++;
           if (processed === total) {

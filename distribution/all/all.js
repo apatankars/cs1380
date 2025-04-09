@@ -36,6 +36,8 @@ const mr = require('./mr');
 
 const indexer = require('./indexer');
 
+const crawler = require('./crawler');
+
 module.exports = {
   comm: comm,
   groups: groups,
@@ -45,5 +47,6 @@ module.exports = {
   mem: mem,
   store: store,
   mr: mr,
-  indexer: indexer
+  indexer: indexer,
+  crawler: crawler
 };

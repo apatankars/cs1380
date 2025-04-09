@@ -1,0 +1,22 @@
+{
+  "crawling": {
+    "pagesProcessed": 9,
+    "totalCrawlTime": 1353,
+    "bytesDownloaded": 376476,
+    "avgProcessingTime": 150.33333333333334
+  },
+  "indexing": {
+    "documentsIndexed": 0,
+    "totalIndexTime": 0,
+    "bytesTransferred": 0,
+    "avgIndexTime": 0,
+    "termsExtracted": 0
+  },
+  "memory": {
+    "peaks": [],
+    "averages": []
+  },
+  "startTime": 1744241773307,
+  "endTime": 1744241794994,
+  "totalRuntime": 21.687
+}
