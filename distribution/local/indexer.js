@@ -221,7 +221,7 @@ function index(configuration, callback) {
     // Extract document data from configuration
     const document = configuration.value || configuration;
     
-    if (!document || !document.url || !document.article_words) {
+    if (!document || !document.url) {
       return callback(new Error('Document data is missing required fields'), null);
     }
     
@@ -237,9 +237,16 @@ function index(configuration, callback) {
     
     try {
       const docId = document.url;
-      const words = document.article_words || [];
       const hierarchy = document.hierarchy || [];
       const binomialName = document.binomial_name || '';
+      
+      // NEW: Use pre-processed word counts instead of article_words
+      const wordCounts = document.word_counts ? 
+                        new Map(Object.entries(document.word_counts)) : 
+                        new Map();
+      
+      // NEW: Use total_words for TF calculations
+      const totalWords = document.total_words || 0;
       
       console.log(`Processing document: ${docId}`);
       
@@ -257,23 +264,8 @@ function index(configuration, callback) {
       const kingdom = taxonomyInfo['kingdom'] || '';
       const family = taxonomyInfo['family'] || '';
       
-      const wordCounts = new Map();
-      const totalWords = words.length;
-      
-      for (const word of words) {
-
-        if (word.length <= 2) continue;
-
-        const cleanWord = word.toLowerCase();
-        
-        if (stopWords.has(cleanWord)) continue;
-        
-        if (!alphaOnlyPattern.test(cleanWord)) continue;
-        
-        wordCounts.set(cleanWord, (wordCounts.get(cleanWord) || 0) + 1);
-      }
-      
-      console.log(`Document ID: ${docId}, Total words processed: ${totalWords}, Total unique terms: ${wordCounts.size}`);
+      // Skip word processing - already done in crawler
+      console.log(`Document ID: ${docId}, Total words: ${totalWords}, Unique terms: ${wordCounts.size}`);
       metrics.totalTerms = wordCounts.size;
 
       distribution.local.groups.get('index', (err, group) => {
@@ -348,8 +340,8 @@ function index(configuration, callback) {
           for (const [prefix, terms] of prefixes) {
             const prefixData = {};
             for (const [word, count] of terms) {
-              // Calculate term frequency (TF)
-              const tf = count / wordCounts.size;
+              // NEW: Calculate term frequency (TF) using total_words
+              const tf = count / totalWords;
               
               // Enhanced ranking factors
               
@@ -367,14 +359,11 @@ function index(configuration, callback) {
               const inKingdom = kingdom.toLowerCase().includes(word);
               const inFamily = family.toLowerCase().includes(word);
               
-              // 4. Calculate proximity to taxonomic terms
-              // This would need context of the full text, simplified here
-              
               // Create enhanced ranking score with multiple factors
               const rankingFactors = {
                 // Base weight is term frequency
                 tf: tf,
-                // Taxonomy level boosts (kingdom is more important than species for classification)
+                // Taxonomy level boosts
                 taxonomyBoost: inTaxonomy ? (
                   taxonomyLevel === 'kingdom' ? 5.0 :
                   taxonomyLevel === 'phylum' ? 4.0 :
@@ -471,6 +460,7 @@ function index(configuration, callback) {
         
         // Helper function to finish processing and report metrics
         function finishProcessing(success) {
+          // [No changes needed in this function]
           metrics.processingEndTime = Date.now();
           
           // Log performance metrics

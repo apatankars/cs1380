@@ -260,7 +260,7 @@ distribution.node.start(async (server) => {
     // Setup periodic crawling
     const crawlInterval = setInterval(() => {
       distribution.taxonomy.crawler.crawl_one((err, result) => {
-        if (err) {
+        if (err && !isEmptyObject(err)) {
           console.error("Error during crawl iteration:", err);
         } else if (result && Object.keys(result).length > 0) {
           // At least one node performed a successful crawl

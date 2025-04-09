@@ -1,22 +1,33 @@
 {
   "crawling": {
-    "pagesProcessed": 10,
-    "totalCrawlTime": 1623,
-    "bytesDownloaded": 716563,
-    "avgProcessingTime": 162.3
+    "pagesProcessed": 78,
+    "totalCrawlTime": 21915,
+    "bytesDownloaded": 4223364,
+    "avgProcessingTime": 280.96153846153845
   },
   "indexing": {
-    "documentsIndexed": 0,
-    "totalIndexTime": 0,
-    "bytesTransferred": 0,
-    "avgIndexTime": 0,
-    "termsExtracted": 0
+    "documentsIndexed": 9,
+    "totalIndexTime": 11663,
+    "bytesTransferred": 92386,
+    "avgIndexTime": 1295.888888888889,
+    "termsExtracted": 6739
   },
   "memory": {
-    "peaks": [],
+    "peaks": [
+      {
+        "timestamp": 1744242599467,
+        "heapUsed": 45,
+        "heapTotal": 79
+      },
+      {
+        "timestamp": 1744242659473,
+        "heapUsed": 12,
+        "heapTotal": 14
+      }
+    ],
     "averages": []
   },
-  "startTime": 1744241773307,
-  "endTime": 1744241794994,
-  "totalRuntime": 21.687
+  "startTime": 1744242539461,
+  "endTime": 1744242697527,
+  "totalRuntime": 158.066
 }

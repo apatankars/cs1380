@@ -58,6 +58,7 @@ function indexer(config) {
         console.log(`Routing indexing request for ${configuration.url || 'document'} to node ${targetNode.ip}:${targetNode.port}`);
 
         // Send to the local indexer on the chosen node
+        // No changes needed here - just pass the configuration as-is
         const remoteConfig = {
           service: 'indexer',
           method: 'index',

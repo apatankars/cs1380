@@ -112,7 +112,7 @@ function get(configuration, callback) {
 
   const groupDir = path.join('store', nodeID, gid);
   const filePath = path.join(groupDir, sanitizeKey(key) + '.json');
-  console.log("GETTING FROM THE FILEPATH: ", filePath)
+  // console.log("GETTING FROM THE FILEPATH: ", filePath)
 
   // check file existence
   if (!fs.existsSync(filePath)) {
@@ -302,7 +302,7 @@ function bulk_append(data, callback) {
       const filePath = path.join(groupDir, sanitizeKey(`prefix-${prefix}`) + '.json');
       
       // For debugging
-      console.log("Processing prefix batch:", prefix, "with", Object.keys(prefixData).length, "terms");
+      // console.log("Processing prefix batch:", prefix, "with", Object.keys(prefixData).length, "terms");
       
       // Read existing data for this prefix
       let existingData = {};

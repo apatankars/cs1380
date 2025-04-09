@@ -216,11 +216,11 @@ function crawl_one(callback) {
               .filter(word => alphaOnlyPattern.test(word)) // Only alphabetic words
               .filter(word => !stopWordsSet.has(word)); // Filter out stop words
             
-            // // Count word occurrences
-            // const wordCounts = new Map();
-            // for (const word of all_words) {
-            //   wordCounts.set(word, (wordCounts.get(word) || 0) + 1);
-            // }
+            // Count word occurrences
+            const wordCounts = new Map();
+            for (const word of all_words) {
+              wordCounts.set(word, (wordCounts.get(word) || 0) + 1);
+            }
             
             // Convert to the format expected by the indexer
             const species_data = {
