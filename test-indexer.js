@@ -200,7 +200,7 @@ distribution.node.start(async (server) => {
     for (const node of nodes) {
       await new Promise((resolve) => {
         // First establish a connection to the node
-        distribution.local.comm.send([], {
+        distribution.local.comm.send(['sid'], {
           service: 'status',
           method: 'get',
           node: node
