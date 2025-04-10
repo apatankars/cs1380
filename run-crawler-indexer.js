@@ -98,32 +98,45 @@ const createGroup = async (groupName, nodes) => {
   return { groupConfig, group };
 };
 
-// Helper to get stats from the crawler
+// Helper to get crawlerStats from the crawler
 const getCrawlerStats = () => {
   return new Promise((resolve, reject) => {
-    distribution.taxonomy.crawler.get_stats((err, stats) => {
+    distribution.taxonomy.crawler.get_stats((err, crawlerStats) => {
       if (err) {
-        console.error("Error getting crawler stats:", err);
+        console.error("Error getting crawler crawlerStats:", err);
         reject(err);
       } else {
-        resolve(stats);
+        resolve(crawlerStats);
       }
     });
   });
 };
 
-// Helper to get aggregated metrics from crawler stats
-const aggregateMetrics = (stats) => {
+const getIndexerStats = () => {
+    return new Promise((resolve, reject => {
+        distribution.index.indexer.get_stats((err, crawlerStats) => {
+            if (err) {
+                console.error("Error getting crawler crawlerStats:", err);
+                reject(err);
+            } else {
+                resolve(crawlerStats);
+            }
+        })
+    }))
+}
+
+// Helper to get aggregated metrics from crawler and indexer crawlerStats
+const aggregateMetrics = (crawlerStats, indexerStats) => {
   const aggregated = {
     crawling: {
       totalPagesProcessed: 0,
       totalBytesDownloaded: 0,
-      avgProcessingTime: 0
+      avgProcessingTime: 0,
+      totalTermsExtracted: 0,
+      totalBytesTransferred: 0,
     },
     indexing: {
       totalDocumentsIndexed: 0,
-      totalTermsExtracted: 0,
-      totalBytesTransferred: 0,
       avgIndexTime: 0
     },
     links: {
@@ -136,34 +149,44 @@ const aggregateMetrics = (stats) => {
   let totalCrawlTime = 0;
   let totalIndexTime = 0;
   
-  // Process node stats
-  for (const nodeId in stats) {
-    if (!stats[nodeId]) continue;
+  // Process node crawlerStats
+  for (const nodeId in crawlerStats) {
+    if (!crawlerStats[nodeId]) continue;
     
-    // Links stats
-    aggregated.links.totalToCrawl += stats[nodeId].links_to_crawl || 0;
-    aggregated.links.totalCrawled += stats[nodeId].crawled_links || 0;
-    aggregated.links.totalTargetsFound += stats[nodeId].num_target_found || 0;
+    // Links crawlerStats
+    aggregated.links.totalToCrawl += crawlerStats[nodeId].links_to_crawl || 0;
+    aggregated.links.totalCrawled += crawlerStats[nodeId].crawled_links || 0;
     
     // Process metrics
-    if (stats[nodeId].metrics) {
-      const metrics = stats[nodeId].metrics;
+    if (crawlerStats[nodeId].metrics) {
+      const crawlerMetrics = crawlerStats[nodeId].metrics;
       
       // Crawling metrics
-      if (metrics.crawling) {
-        aggregated.crawling.totalPagesProcessed += metrics.crawling.pagesProcessed || 0;
-        aggregated.crawling.totalBytesDownloaded += metrics.crawling.bytesDownloaded || 0;
-        totalCrawlTime += metrics.crawling.totalCrawlTime || 0;
-      }
-      
-      // Indexing metrics
-      if (metrics.indexing) {
-        aggregated.indexing.totalDocumentsIndexed += metrics.indexing.documentsIndexed || 0;
-        aggregated.indexing.totalTermsExtracted += metrics.indexing.termsExtracted || 0;
-        aggregated.indexing.totalBytesTransferred += metrics.indexing.bytesTransferred || 0;
-        totalIndexTime += metrics.indexing.totalIndexTime || 0;
+      if (crawlerMetrics.crawling) {
+        aggregated.crawling.totalPagesProcessed += crawlerMetrics.crawling.pagesProcessed || 0;
+        aggregated.crawling.totalBytesDownloaded += crawlerMetrics.crawling.bytesDownloaded || 0;
+        aggregated.links.totalTargetsFound += crawlerMetrics.crawling.num_target_found || 0;
+        totalCrawlTime += crawlerMetrics.crawling.totalCrawlTime || 0;
+        aggregated.crawling.totalBytesTransferred += crawlerMetrics.crawling.bytesTransferred || 0;
+        aggregated.crawling.totalTermsExtracted += crawlerMetrics.crawling.termsExtracted || 0;
       }
     }
+  }
+
+  for (const nodeId in indexerStats) {
+    if (!indexerStats[nodeId]) continue;
+
+    if (indexerStats[nodeId].metrics) {
+        const indexerMetrics = indexerStats[nodeId].metrics;
+
+        if (indexerMetrics) {
+            aggregateMetrics.indexing.totalDocumentsIndexed += indexerMetrics.documentsIndexed || 0;
+            totalIndexTime += indexerMetrics.totalIndexTime || 0;
+        }
+    }
+
+
+
   }
   
   // Calculate averages
@@ -199,23 +222,23 @@ distribution.node.start(async (server) => {
     const { groupConfig: indexConfig, group: indexGroup } = await createGroup('index', nodes);
     
     // Step 4: Setup global info for all nodes
-    console.log("Setting up global info...");
-    await new Promise((resolve, reject) => {
-      const globalInfo = {
-        nodes: nodes,
-        num_nodes: nodes.length
-      };
+    // console.log("Setting up global info...");
+    // await new Promise((resolve, reject) => {
+    //   const globalInfo = {
+    //     nodes: nodes,
+    //     num_nodes: nodes.length
+    //   };
       
-      distribution.taxonomy.mem.put(globalInfo, 'global_info', (err, val) => {
-        if (err) {
-          console.error("Error setting global info:", err);
-          reject(err);
-        } else {
-          console.log("Global info set successfully");
-          resolve(val);
-        }
-      });
-    });
+    //   distribution.taxonomy.mem.put(globalInfo, 'global_info', (err, val) => {
+    //     if (err) {
+    //       console.error("Error setting global info:", err);
+    //       reject(err);
+    //     } else {
+    //       console.log("Global info set successfully");
+    //       resolve(val);
+    //     }
+    //   });
+    // });
     
     // Step 5: Initialize the crawler service
     console.log("Initializing crawler service...");
@@ -288,8 +311,9 @@ distribution.node.start(async (server) => {
     // Report metrics every 10 seconds
     metricsInterval = setInterval(async () => {
       try {
-        const stats = await getCrawlerStats();
-        const metrics = aggregateMetrics(stats);
+        const crawlerStats = await getCrawlerStats();
+        const indexerStats = await getIndexerStats();
+        const metrics = aggregateMetrics(crawlerStats, indexerStats);
         
         console.log("\n=== System Metrics ===");
         console.log(`Time: ${new Date().toISOString()}`);
@@ -329,8 +353,9 @@ distribution.node.start(async (server) => {
       
       // Get final metrics
       try {
-        const stats = await getCrawlerStats();
-        const metrics = aggregateMetrics(stats);
+        const crawlerStats = await getCrawlerStats();
+        const indexerStats = await getIndexerStats();
+        const metrics = aggregateMetrics(crawlerStats, indexerStats);
         
         console.log("\n=== Final Metrics ===");
         console.log(`Links crawled: ${metrics.links.totalCrawled}`);

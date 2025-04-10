@@ -41,14 +41,8 @@ function initialize(callback) {
       pagesProcessed: 0,
       totalCrawlTime: 0,
       bytesDownloaded: 0,
-      avgProcessingTime: 0
-    },
-    indexing: {
-      documentsIndexed: 0,
-      totalIndexTime: 0,
-      bytesTransferred: 0,
-      avgIndexTime: 0,
-      termsExtracted: 0
+      avgProcessingTime: 0,
+      targetsHit: 0
     },
     memory: {
       peaks: [],
@@ -241,42 +235,21 @@ function crawl_one(callback) {
             
             // Calculate data size for metrics
             const dataSize = Buffer.byteLength(uncompressed_data, 'utf8');
-            metrics.indexing.bytesTransferred += dataSize;
-            metrics.indexing.termsExtracted += wordCounts.size;
+            metrics.crawling.bytesTransferred += dataSize;
+            metrics.crawling.termsExtracted += wordCounts.size;
             
-            global.distribution.local.store.put(species_data, path_safe_url, (e, v) => {
               // After saving, send to the indexer
-              const indexStartTime = Date.now();
+            metrics.crawling.targetsHit += 1;
               
               // Check if index group exists and send to indexer
               global.distribution.local.groups.get('index', (err, indexGroup) => {
                 if (!err && indexGroup) {
                   // Index group exists, try to send to indexer
                   if (global.distribution.index && global.distribution.index.indexer) {
-                    global.distribution.index.indexer.index(species_data, (err, indexResult) => {
-                      const indexEndTime = Date.now();
-                      const indexDuration = indexEndTime - indexStartTime;
-                      
-                      // Update indexing metrics
-                      metrics.indexing.documentsIndexed++;
-                      metrics.indexing.totalIndexTime += indexDuration;
-                      metrics.indexing.avgIndexTime = 
-                        metrics.indexing.totalIndexTime / metrics.indexing.documentsIndexed;
-                      
-                      if (err) {
-                        console.error(`Error indexing document ${url}:`, err);
-                        result.indexing = { status: 'error', error: err.message };
-                      } else {
-                        console.log(`Successfully indexed ${url} in ${indexDuration}ms`);
-                        result.indexing = { 
-                          status: 'success', 
-                          duration_ms: indexDuration,
-                          metrics: indexResult?.metrics || {}
-                        };
-                      }
-                      
-                      processCrawlResult(url, links_on_page, result, crawlStartTime, is_target_class, callback);
+                    global.distribution.index.indexer.index(species_data, (err, indexResult) => {                      
                     });
+                    result.indexing = { status: 'called' }
+                    processCrawlResult(url, links_on_page, result, crawlStartTime, is_target_class, callback);
                   } else {
                     // Indexer service not available
                     result.indexing = { status: 'skipped', reason: 'indexer_not_available' };
@@ -288,7 +261,7 @@ function crawl_one(callback) {
                   processCrawlResult(url, links_on_page, result, crawlStartTime, is_target_class, callback);
                 }
               });
-            });
+            // });
           } else {
             // Not a target class or no binomial name
             result.indexing = { status: 'skipped', reason: 'not_target_or_no_binomial' };
@@ -323,17 +296,18 @@ function processCrawlResult(url, links_on_page, result, crawlStartTime, is_targe
   global.distribution.local.mem.get('crawled_links_map', (e, crawled_links_map) => {
     crawled_links_map.set(url, true);
 
-    global.distribution.taxonomy.mem.get('global_info', (e, v) => {
+    global.distribution.local.groups.get('taxonomy', (e, v) => {
       if (e) {
-        console.error('Error getting global info:', e);
+        console.error('Error getting group info:', e);
         return callback(null, { 
           status: 'error', 
-          error: 'Failed to get global_info',
+          error: 'Failed to get group info',
           url: url 
         });
       }
 
-      const { nodes, num_nodes } = v;
+      const nodes = Object.values(v);
+      const num_nodes = nodes.length;
 
       const get_nx = (link) => nodes[parseInt(global.distribution.util.id.getID(link).slice(0, 8), 16) % num_nodes];
       const new_links = [...new Set(is_target_class ? links_on_page : [])];
@@ -386,36 +360,36 @@ function get_stats(callback) {
   global.distribution.local.mem.get('links_to_crawl_map', (e1, links_to_crawl_map) => {
     global.distribution.local.mem.get('crawled_links_map', (e2, crawled_links_map) => {
       const fs = require('fs');
-      let num_target_found = 0;
+    //   let num_target_found = metrics;
 
-      try {
-        // Get the node ID
-        const nodeConfig = global.nodeConfig;
-        const nodeID = global.distribution.util.id.getNID(nodeConfig);
+    //   try {
+    //     // Get the node ID
+    //     const nodeConfig = global.nodeConfig;
+    //     const nodeID = global.distribution.util.id.getNID(nodeConfig);
         
-        // Use path.join to navigate to the store directory
-        const store_path = path.join('store', nodeID);
+    //     // Use path.join to navigate to the store directory
+    //     const store_path = path.join('store', nodeID);
         
-        if (fs.existsSync(store_path)) {
-          const folders = fs.readdirSync(store_path).filter(folder => !folder.includes('.'));
-          const counts = folders.map(folder => {
-            const subfolder = path.join(store_path, folder);
-            if (fs.existsSync(subfolder) && fs.statSync(subfolder).isDirectory()) {
-              return fs.readdirSync(subfolder).length;
-            }
-            return 0;
-          });
-          num_target_found = counts.reduce((a, b) => a + b, 0) - 2; // Subtract 2 for .links_to_crawl and .crawled_links
-        }
-      } catch (err) {
-        console.error("Error while counting targets:", err);
-        num_target_found = 0;
-      }
+    //     if (fs.existsSync(store_path)) {
+    //       const folders = fs.readdirSync(store_path).filter(folder => !folder.includes('.'));
+    //       const counts = folders.map(folder => {
+    //         const subfolder = path.join(store_path, folder);
+    //         if (fs.existsSync(subfolder) && fs.statSync(subfolder).isDirectory()) {
+    //           return fs.readdirSync(subfolder).length;
+    //         }
+    //         return 0;
+    //       });
+    //       num_target_found = counts.reduce((a, b) => a + b, 0) - 2; // Subtract 2 for .links_to_crawl and .crawled_links
+    //     }
+    //   } catch (err) {
+    //     console.error("Error while counting targets:", err);
+    //     num_target_found = 0;
+    //   }
 
       const stats = {
         links_to_crawl: links_to_crawl_map.size,
         crawled_links: crawled_links_map.size,
-        num_target_found: num_target_found,
+        // num_target_found: num_target_found,
         metrics: metrics
       };
 

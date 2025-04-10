@@ -11,7 +11,14 @@ const cb = (e, v) => {
   }
 };
 
-
+const metrics = {
+  processingStartTime: Date.now(),
+  totalTerms: 0,
+  totalPrefixes: 0,
+  prefixBatchSizes: [],
+  nodeBatchTimes: new Map(),
+  processingEndTime: 0
+};
 
 // const indexer = {
   /**
@@ -224,16 +231,7 @@ function index(configuration, callback) {
     if (!document || !document.url) {
       return callback(new Error('Document data is missing required fields'), null);
     }
-    
-    // Initialize metrics
-    const metrics = {
-      processingStartTime: Date.now(),
-      totalTerms: 0,
-      totalPrefixes: 0,
-      prefixBatchSizes: [],
-      nodeBatchTimes: new Map(),
-      processingEndTime: 0
-    };
+
     
     try {
       const docId = document.url;
