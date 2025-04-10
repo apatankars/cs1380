@@ -301,9 +301,6 @@ function bulk_append(data, callback) {
       const prefixData = batch.data;
       const filePath = path.join(groupDir, sanitizeKey(`prefix-${prefix}`) + '.json');
       
-      // For debugging
-      // console.log("Processing prefix batch:", prefix, "with", Object.keys(prefixData).length, "terms");
-      
       // Read existing data for this prefix
       let existingData = {};
       if (fs.existsSync(filePath)) {

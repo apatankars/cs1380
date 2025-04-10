@@ -24,13 +24,6 @@ const indexerMetrics = {
   startTime: Date.now()
 };
 
-// const indexer = {
-  /**
-   * Process a document and distribute its terms to appropriate index nodes
-   * 
-   * @param {Object} configuration - Contains the document data to index
-   * @param {Function} callback - Callback function (error, result)
-   */
 function index(configuration, callback) {
     callback = callback || cb;
     const metrics = {
@@ -40,15 +33,12 @@ function index(configuration, callback) {
       prefixBatchSizes: [],
       nodeBatchTimes: new Map()
     };
-    /**
-     * Helper function to extract a smart prefix from a word
-     * Using first two letters creates a good distribution (up to 676 prefixes)
-     */
+
+    // TODO: Need to revist this to actually add in common prefixes
     const COMMON_PREFIXES = new Set([
       'th', 'an', 'co', 're', 'in', 'de', 'pr', 'st', 'en', 'tr', 'di', 'ch', 'pe'
     ]);
 
-    // Improved prefix function
     function getSmartPrefix(term) {
       if (!term) return 'aa';
       
@@ -80,7 +70,6 @@ function index(configuration, callback) {
       return callback(new Error('Configuration is required for indexing'), null);
     }
     
-    // Extract document data from configuration
     const document = configuration.value || configuration;
     
     if (!document || !document.url) {
@@ -94,17 +83,14 @@ function index(configuration, callback) {
       const hierarchy = document.hierarchy || [];
       const binomialName = document.binomial_name || '';
       
-      // NEW: Use pre-processed word counts instead of article_words
       const wordCounts = document.word_counts ? 
                         new Map(Object.entries(document.word_counts)) : 
                         new Map();
       
-      // NEW: Use total_words for TF calculations
       const totalWords = document.total_words || 0;
       
       console.log(`Processing document: ${docId}`);
       
-      // Extract taxonomic information for ranking
       const taxonomyInfo = {};
       if (hierarchy && Array.isArray(hierarchy)) {
         hierarchy.forEach(pair => {
@@ -118,7 +104,6 @@ function index(configuration, callback) {
       const kingdom = taxonomyInfo['kingdom'] || '';
       const family = taxonomyInfo['family'] || '';
       
-      // Skip word processing - already done in crawler
       console.log(`Document ID: ${docId}, Total words: ${totalWords}, Unique terms: ${wordCounts.size}`);
       metrics.totalTerms = wordCounts.size;
 
@@ -134,7 +119,6 @@ function index(configuration, callback) {
         const prefixGroups = new Map(); // prefix -> terms
         const nodeToPrefix = new Map(); // node -> prefixes
         
-        // First pass: Group terms by prefix
         for (const [word, count] of wordCounts) {
           const prefix = getSmartPrefix(word);
           if (!prefixGroups.has(prefix)) {
@@ -180,7 +164,6 @@ function index(configuration, callback) {
           const nodeId = distribution.util.id.getNID(node);
           const nodePrefixBatches = [];
           
-          // Initialize metrics for this node
           if (!metrics.nodeBatchTimes.has(nodeId)) {
             metrics.nodeBatchTimes.set(nodeId, {
               batchCount: 0,
@@ -194,30 +177,19 @@ function index(configuration, callback) {
           for (const [prefix, terms] of prefixes) {
             const prefixData = {};
             for (const [word, count] of terms) {
-              // NEW: Calculate term frequency (TF) using total_words
-              const tf = count / totalWords;
-              
-              // Enhanced ranking factors
-              
-              // 1. Check if word appears in taxonomy information
+              const tf = count / totalWords;              
               const taxonomyMatch = Object.entries(taxonomyInfo).find(
                 ([key, value]) => value.toLowerCase().includes(word)
               );
               const inTaxonomy = !!taxonomyMatch;
               const taxonomyLevel = inTaxonomy ? taxonomyMatch[0] : null;
-              
-              // 2. Check if word is part of binomial name (scientific name)
               const inBinomialName = binomialName.toLowerCase().includes(word);
-              
-              // 3. Calculate position importance (terms appearing in kingdom/family get boost)
               const inKingdom = kingdom.toLowerCase().includes(word);
               const inFamily = family.toLowerCase().includes(word);
               
-              // Create enhanced ranking score with multiple factors
+              // !! New ranking mechnaism using the classification data
               const rankingFactors = {
-                // Base weight is term frequency
                 tf: tf,
-                // Taxonomy level boosts
                 taxonomyBoost: inTaxonomy ? (
                   taxonomyLevel === 'kingdom' ? 5.0 :
                   taxonomyLevel === 'phylum' ? 4.0 :
@@ -226,28 +198,22 @@ function index(configuration, callback) {
                   taxonomyLevel === 'family' ? 2.0 :
                   taxonomyLevel === 'genus' ? 1.5 : 1.0
                 ) : 1.0,
-                // Scientific name is highly specific to the entity
                 binomialBoost: inBinomialName ? 4.0 : 1.0,
-                // Position importance (kingdom/family terms are important classifiers)
                 positionBoost: inKingdom ? 3.0 : (inFamily ? 2.0 : 1.0),
-                // Final score combines all factors
                 score: 0 // Calculated below
               };
               
-              // Calculate final score as product of all factors × tf
               rankingFactors.score = tf * 
                 rankingFactors.taxonomyBoost * 
                 rankingFactors.binomialBoost * 
                 rankingFactors.positionBoost;
               
-              // Create entry for this term with all the enhanced data
               prefixData[word] = [{
                 url: docId,
                 tf: tf,
                 ranking: rankingFactors,
                 taxonomyLevel: taxonomyLevel,
                 isBinomial: inBinomialName,
-                // Store page metadata for later query refinement
                 pageInfo: {
                   kingdom: kingdom,
                   family: family,
@@ -258,24 +224,18 @@ function index(configuration, callback) {
               nodeTermCount++;
             }
             
-            // Create a batch for this prefix
-            nodePrefixBatches.push({
+           nodePrefixBatches.push({
               prefix,
               data: prefixData
             });
           }
-          
-          // Update metrics
           metrics.nodeBatchTimes.get(nodeId).termCount = nodeTermCount;
           
-          // Only send if we have prefixes to send
           if (nodePrefixBatches.length > 0) {
             console.log(`Sending batch with ${nodePrefixBatches.length} prefixes to node ${nodeId}`);
             metrics.prefixBatchSizes.push(nodePrefixBatches.length);
             
             const batchStartTime = Date.now();
-            
-            // Send batch using bulk_append
             distribution.local.comm.send([{
               prefixBatches: nodePrefixBatches,
               gid: 'index'
@@ -286,16 +246,12 @@ function index(configuration, callback) {
             }, (err, val) => {
               const batchEndTime = Date.now();
               const batchTime = batchEndTime - batchStartTime;
-              
-              // Update metrics
               metrics.nodeBatchTimes.get(nodeId).batchCount++;
               metrics.nodeBatchTimes.get(nodeId).totalTime += batchTime;
               
               if (err) {
                 console.error(`Error sending to ${node.ip}:${node.port}:`, err);
                 completedBatches++;
-                
-                // Check if all batches are completed
                 if (completedBatches === totalBatches) {
                   finishProcessing(false);
                 }
@@ -303,7 +259,6 @@ function index(configuration, callback) {
                 console.log(`Batch sent to ${node.ip}:${node.port} (${batchTime.toFixed(2)}ms)`);
                 completedBatches++;
                 
-                // Check if all batches are completed
                 if (completedBatches === totalBatches) {
                   finishProcessing(true);
                 }
@@ -312,25 +267,21 @@ function index(configuration, callback) {
           }
         }
         
-        // Helper function to finish processing and report metrics
         function finishProcessing(success) {
-          // [No changes needed in this function]
           metrics.processingEndTime = Date.now();
           
-          // Log performance metrics
+          // Log performance metrics (GPT CODE!!!)
           const totalProcessingTime = metrics.processingEndTime - metrics.processingStartTime;
           console.log(`Total processing time: ${totalProcessingTime}ms`);
           console.log(`Total terms processed: ${metrics.totalTerms}`);
           console.log(`Total prefixes: ${metrics.totalPrefixes}`);
           
-          // Calculate average batch size
           if (metrics.prefixBatchSizes.length > 0) {
             const avgBatchSize = metrics.prefixBatchSizes.reduce((sum, size) => sum + size, 0) / 
                                metrics.prefixBatchSizes.length;
             console.log(`Average batch size: ${avgBatchSize.toFixed(2)} prefixes`);
           }
           
-          // Calculate node processing stats
           let totalBatchCount = 0;
           let totalBatchTime = 0;
           
@@ -349,7 +300,6 @@ function index(configuration, callback) {
             console.log(`Overall average batch time: ${avgBatchTime.toFixed(2)}ms`);
           }
 
-          // Inside finishProcessing function
           const indexingTime = Date.now() - indexStartTime;
           indexerMetrics.documentsIndexed++;
           indexerMetrics.totalIndexTime += indexingTime;
@@ -357,18 +307,14 @@ function index(configuration, callback) {
           indexerMetrics.totalPrefixesProcessed += metrics.totalPrefixes || 0;
           indexerMetrics.batchesSent += totalBatchCount || 0;
           indexerMetrics.processingTimes.push(indexingTime);
-
-          // Keep the processingTimes array limited to last 20 entries
           if (indexerMetrics.processingTimes.length > 20) {
             indexerMetrics.processingTimes.shift();
           }
 
-          // If there was an error, increment the error count
           if (!success) {
             indexerMetrics.errors++;
           }
-          
-          // Return result
+
           callback(null, {
             status: success ? 'success' : 'partial_success',
             docId: docId,
@@ -387,17 +333,14 @@ function index(configuration, callback) {
       callback(error, null);
     }
   }
-// };
 
 function get_stats(callback) {
   callback = callback || cb;
-  
-  // Calculate average processing time
+
   const avgIndexTime = indexerMetrics.documentsIndexed > 0 
     ? indexerMetrics.totalIndexTime / indexerMetrics.documentsIndexed 
     : 0;
-  
-  // Create a snapshot of current metrics
+
   const stats = {
     metrics: {
       documentsIndexed: indexerMetrics.documentsIndexed,
@@ -408,7 +351,6 @@ function get_stats(callback) {
       batchesSent: indexerMetrics.batchesSent,
       errors: indexerMetrics.errors,
       uptime: Date.now() - indexerMetrics.startTime,
-      // Include the last few processing times for trend analysis
       recentTimes: indexerMetrics.processingTimes.slice(-5)
     }
   };

@@ -3,7 +3,6 @@ const fs = require('fs');
 const path = require('path');
 const parse = require('node-html-parser').parse;
 
-// Default callback
 const cb = (e, v) => {
   if (e) {
     console.error(e);
@@ -12,35 +11,27 @@ const cb = (e, v) => {
   }
 };
 
-// Initialize metrics object
 let metrics = null;
 let metricsInterval = null;
 let stopWordsSet = null;
 
-/**
- * Initialize the crawler service
- */
 function initialize(callback) {
   callback = callback || cb;
   
   const crawlerDir = path.join('crawler-files');
-  const logsDir = path.join(crawlerDir, 'logs');
   const metricsDir = path.join(crawlerDir, 'metrics');
   
-  // Create directories if they don't exist
   if (!fs.existsSync(crawlerDir)) fs.mkdirSync(crawlerDir, { recursive: true });
-  if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
   if (!fs.existsSync(metricsDir)) fs.mkdirSync(metricsDir, { recursive: true });
   
-  const log_file_path = path.join(logsDir, `log-${global.nodeConfig.port}.txt`);
   const metrics_file_path = path.join(metricsDir, `metrics-${global.nodeConfig.port}.json`);
   
-  // Initialize metrics
   metrics = {
     crawling: {
       pagesProcessed: 0,
       totalCrawlTime: 0,
       bytesDownloaded: 0,
+      termsExtracted: 0,
       avgProcessingTime: 0,
       targetsHit: 0
     },
@@ -51,12 +42,9 @@ function initialize(callback) {
     startTime: Date.now()
   };
   
-  // Initialize stop words
   stopWordsSet = getStopWordsSet();
   
-  // Save metrics periodically
   metricsInterval = setInterval(() => {
-    // Add memory metrics
     const memUsage = process.memoryUsage();
     metrics.memory.peaks.push({
       timestamp: Date.now(),
@@ -65,7 +53,7 @@ function initialize(callback) {
     });
     
     fs.writeFileSync(metrics_file_path, JSON.stringify(metrics, null, 2));
-  }, 60000); // Every minute
+  }, 60000); 
   
   const links_to_crawl_map = new Map();
   const crawled_links_map = new Map();
@@ -93,9 +81,6 @@ function initialize(callback) {
   });
 }
 
-/**
- * Add a link to the crawl queue
- */
 function add_link_to_crawl(link, callback) {
   callback = callback || cb;
   
@@ -110,11 +95,7 @@ function add_link_to_crawl(link, callback) {
   });
 }
 
-/**
- * Get a set of stop words to filter out common terms
- */
 function getStopWordsSet() {
-  // Create a set of common stop words to filter out
   return new Set([
         // Common English stop words (keep your original list)
         "i", "me", "my", "myself", "we", "our", "ours", "ourselves",
@@ -267,27 +248,20 @@ function getStopWordsSet() {
     ]);
 }
 
-/**
- * Crawl and process a single page from the queue
- */
 function crawl_one(callback) {
   callback = callback || cb;
-  // Record start time for metrics
   const crawlStartTime = Date.now();
   
   global.distribution.local.mem.get('links_to_crawl_map', (e1, links_to_crawl_map) => {
     global.distribution.local.mem.get('crawled_links_map', (e2, crawled_links_map) => {                        
-      // get link to crawl
       if(links_to_crawl_map.size === 0) return callback(null, { status: 'skipped', reason: 'no_links' });
       const [url, _] = links_to_crawl_map.entries().next().value;
       links_to_crawl_map.delete(url);
       if(crawled_links_map.has(url)) return callback(null, { status: 'skipped', reason: 'already_crawled' });
 
-      // crawl it!
       fetch(`https://en.wikipedia.org${url}`)
         .then((response) => {
           const contentLength = response.headers.get('content-length') || 0;
-          // Update metrics
           metrics.crawling.bytesDownloaded += parseInt(contentLength);
           return response.text();
         })
@@ -334,78 +308,58 @@ function crawl_one(callback) {
           };
           
           if(is_target_class && binomial_name) {
-            // Pre-process the page text - moved from indexer to crawler
             const page_text = root.text;
             const alphaOnlyPattern = /^[a-z]+$/;
             
-            // Extract and pre-process words
             const all_words = (page_text.match(/\b\w+\b/g) || [])
               .map(word => word.toLocaleLowerCase())
               .filter(word => word.length > 2) // Filter out very short words
               .filter(word => alphaOnlyPattern.test(word)) // Only alphabetic words
               .filter(word => !stopWordsSet.has(word)); // Filter out stop words
             
-            // Count word occurrences
             const wordCounts = new Map();
             for (const word of all_words) {
               wordCounts.set(word, (wordCounts.get(word) || 0) + 1);
             }
             
-            // Convert to the format expected by the indexer
             const species_data = {
               hierarchy: hierarchy,
               binomial_name: binomial_name,
               url: url,
-              // Send wordCounts instead of all words to reduce transfer size
-              word_counts: Object.fromEntries(wordCounts),
-              total_words: all_words.length,
-            //   article_words: all_words, // Commented out for now 
-              // Keep a small sample of unique words for debugging
-              word_sample: Array.from(wordCounts.keys()).slice(0, 10)
+              // !! ONLY SENDING wordCounts instead of all words to reduce transfer size
+              word_counts: Object.fromEntries(wordCounts)
             };
             
-            // Store the original document
-            const path_safe_url = url.replace(/\//g, '.');
             const uncompressed_data = JSON.stringify(species_data);
-            
-            // Calculate data size for metrics
             const dataSize = Buffer.byteLength(uncompressed_data, 'utf8');
             metrics.crawling.bytesTransferred += dataSize;
             metrics.crawling.termsExtracted += wordCounts.size;
-            
-              // After saving, send to the indexer
+
             metrics.crawling.targetsHit += 1;
-              
-              // Check if index group exists and send to indexer
-              global.distribution.local.groups.get('index', (err, indexGroup) => {
-                if (!err && indexGroup) {
-                  // Index group exists, try to send to indexer
-                  if (global.distribution.index && global.distribution.index.indexer) {
-                    global.distribution.index.indexer.index(species_data, (err, indexResult) => {                      
-                    });
-                    result.indexing = { status: 'called' }
-                    processCrawlResult(url, links_on_page, result, crawlStartTime, is_target_class, callback);
-                  } else {
-                    // Indexer service not available
-                    result.indexing = { status: 'skipped', reason: 'indexer_not_available' };
-                    processCrawlResult(url, links_on_page, result, crawlStartTime, is_target_class, callback);
-                  }
+
+            global.distribution.local.groups.get('index', (err, indexGroup) => {
+              if (!err && indexGroup) {
+                if (global.distribution.index && global.distribution.index.indexer) {
+                  global.distribution.index.indexer.index(species_data, (err, indexResult) => {                      
+                  });
+                  result.indexing = { status: 'called' }
+                  processCrawlResult(url, links_on_page, result, crawlStartTime, is_target_class, callback);
                 } else {
-                  // Index group doesn't exist
-                  result.indexing = { status: 'skipped', reason: 'index_group_not_available' };
+                  result.indexing = { status: 'skipped', reason: 'indexer_not_available' };
                   processCrawlResult(url, links_on_page, result, crawlStartTime, is_target_class, callback);
                 }
-              });
-            // });
+              } else {
+                result.indexing = { status: 'skipped', reason: 'index_group_not_available' };
+                processCrawlResult(url, links_on_page, result, crawlStartTime, is_target_class, callback);
+              }
+            });
           } else {
-            // Not a target class or no binomial name
             result.indexing = { status: 'skipped', reason: 'not_target_or_no_binomial' };
             processCrawlResult(url, links_on_page, result, crawlStartTime, is_target_class, callback);
           }
         })
         .catch((error) => {
-          // Handle fetch errors
-          console.error(`Error fetching ${url}:`, error);
+          console.error(`ERROS: fetching ${url}:`, error);
           crawled_links_map.set(url, true);
           
           const crawlEndTime = Date.now();
@@ -424,9 +378,6 @@ function crawl_one(callback) {
   });
 }
 
-/**
- * Helper function to process crawl results and add links to the queue
- */
 function processCrawlResult(url, links_on_page, result, crawlStartTime, is_target_class, callback) {
   global.distribution.local.mem.get('crawled_links_map', (e, crawled_links_map) => {
     crawled_links_map.set(url, true);
@@ -446,18 +397,15 @@ function processCrawlResult(url, links_on_page, result, crawlStartTime, is_targe
 
       const get_nx = (link) => nodes[parseInt(global.distribution.util.id.getID(link).slice(0, 8), 16) % num_nodes];
       const new_links = [...new Set(is_target_class ? links_on_page : [])];
-      
-      // Track progress
+
       let processed = 0;
       const total = new_links.length;
       
       if (total === 0) {
-        // No links to process, finish immediately
         finishCrawl();
         return;
       }
-      
-      // Process each link
+
       new_links.forEach(link => {
         const remote = { node: get_nx(link), service: 'crawler', method: 'add_link_to_crawl'};
         global.distribution.local.comm.send([link], remote, (e, v) => {
@@ -469,7 +417,6 @@ function processCrawlResult(url, links_on_page, result, crawlStartTime, is_targe
       });
       
       function finishCrawl() {
-        // Update crawling metrics
         const crawlEndTime = Date.now();
         const crawlDuration = crawlEndTime - crawlStartTime;
         metrics.crawling.pagesProcessed++;
@@ -486,9 +433,6 @@ function processCrawlResult(url, links_on_page, result, crawlStartTime, is_targe
   });
 }
 
-/**
- * Get statistics about the crawler
- */
 function get_stats(callback) {
   callback = callback || cb;
   
@@ -498,7 +442,6 @@ function get_stats(callback) {
       const stats = {
         links_to_crawl: links_to_crawl_map.size,
         crawled_links: crawled_links_map.size,
-        // num_target_found: num_target_found,
         metrics: metrics
       };
 
@@ -507,9 +450,6 @@ function get_stats(callback) {
   });
 }
 
-/**
- * Save crawler data to disk
- */
 function save_maps_to_disk(callback) {
   callback = callback || cb;
   
@@ -531,9 +471,6 @@ function save_maps_to_disk(callback) {
   });
 }
 
-/**
- * Clean up resources
- */
 function cleanup(callback) {
   callback = callback || cb;
   
@@ -541,8 +478,7 @@ function cleanup(callback) {
     clearInterval(metricsInterval);
     metricsInterval = null;
   }
-  
-  // Save final metrics
+
   const metrics_file_path = path.join('crawler-files', 'metrics', `metrics-${global.nodeConfig.port}.json`);
   
   if (metrics) {
@@ -551,8 +487,7 @@ function cleanup(callback) {
     
     fs.writeFileSync(metrics_file_path, JSON.stringify(metrics, null, 2));
   }
-  
-  // Save maps to disk
+
   save_maps_to_disk((err, result) => {
     callback(null, { 
       status: 'success', 

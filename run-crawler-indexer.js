@@ -7,12 +7,23 @@ const path = require('path');
 const fs = require('fs');
 
 // Define test nodes - adjust IP/ports as needed for your environment
-const nodes = [
+const crawl_nodes = [
   { ip: '127.0.0.1', port: 8001 },
   { ip: '127.0.0.1', port: 8002 },
-  { ip: '127.0.0.1', port: 8003 },
-  { ip: '127.0.0.1', port: 8004 }
+  { ip: '127.0.0.1', port: 8003 }
 ];
+
+const index_nodes = [
+    { ip: '127.0.0.1', port: 8004 },
+  { ip: '127.0.0.1', port: 8005 },
+  { ip: '127.0.0.1', port: 8006 },
+  { ip: '127.0.0.1', port: 8007 },
+  { ip: '127.0.0.1', port: 8008 }
+];
+const nodes = [
+  ...crawl_nodes,
+  ...index_nodes
+]
 
 // Helper function to check if an object is empty
 function isEmptyObject(obj) {
@@ -98,6 +109,35 @@ const createGroup = async (groupName, nodes) => {
   return { groupConfig, group };
 };
 
+const createGroupOnGroup = async (originGroupName, groupName, nodes) => {
+    const groupConfig = { gid: groupName };
+  const group = {};
+  
+  nodes.forEach(node => {
+    group[id.getSID(node)] = node;
+  });
+
+  // Create the group in the distributed system
+  await new Promise((resolve, reject) => {
+    // Check if the group service exists
+    if (!distribution[originGroupName]) {
+      console.error(`Error: ${originGroupName} group not initialized properly`);
+      reject(new Error(`${originGroupName} group not initialized`));
+      return;
+    }
+    
+    distribution[originGroupName].groups.put(groupConfig, group, (err, val) => {
+      if (err && !isEmptyObject(err)) {
+        console.error(`Error creating distributed ${groupName} group:`, err);
+        reject(err);
+      } else {
+        console.log(`Distributed ${groupName} group created successfully`);
+        resolve(val);
+      }
+    });
+  });
+}
+
 // Helper to get crawlerStats from the crawler
 const getCrawlerStats = () => {
   return new Promise((resolve, reject) => {
@@ -113,7 +153,7 @@ const getCrawlerStats = () => {
 };
 
 const getIndexerStats = () => {
-    return new Promise((resolve, reject => {
+    return new Promise((resolve, reject) => {
         distribution.index.indexer.get_stats((err, indexerStats) => {
             if (err && !isEmptyObject(err)) {
                 console.error("Error getting indexer indexerStats:", err);
@@ -122,7 +162,7 @@ const getIndexerStats = () => {
                 resolve(indexerStats);
             }
         })
-    }))
+    })
 }
 
 // Helper to get aggregated metrics from crawler and indexer crawlerStats
@@ -180,7 +220,7 @@ const aggregateMetrics = (crawlerStats, indexerStats) => {
         const indexerMetrics = indexerStats[nodeId].metrics;
 
         if (indexerMetrics) {
-            aggregateMetrics.indexing.totalDocumentsIndexed += indexerMetrics.documentsIndexed || 0;
+            aggregated.indexing.totalDocumentsIndexed += indexerMetrics.documentsIndexed || 0;
             totalIndexTime += indexerMetrics.totalIndexTime || 0;
         }
     }
@@ -215,11 +255,17 @@ distribution.node.start(async (server) => {
     
     // Step 2: Create the taxonomy group
     console.log("Creating taxonomy group...");
-    const { groupConfig: taxonomyConfig, group: taxonomyGroup } = await createGroup('taxonomy', nodes);
+    const { groupConfig: taxonomyConfig, group: taxonomyGroup } = await createGroup('taxonomy', crawl_nodes);
     
     // Step 3: Create the index group with the same nodes
     console.log("Creating index group...");
-    const { groupConfig: indexConfig, group: indexGroup } = await createGroup('index', nodes);
+    const { groupConfig: indexConfig, group: indexGroup } = await createGroup('index', index_nodes);
+
+    console.log("Creating index group on taxonomy group...");
+    await createGroupOnGroup('taxonomy', 'index', index_nodes);
+
+    console.log("Creating taxonomy group on index group...");
+    await createGroupOnGroup('index', 'taxonomy', crawl_nodes);
     
     // Step 4: Setup global info for all nodes
     // console.log("Setting up global info...");
@@ -300,7 +346,7 @@ distribution.node.start(async (server) => {
     // Save maps every 30 seconds
     const saveInterval = setInterval(() => {
       distribution.taxonomy.crawler.save_maps_to_disk((err, result) => {
-        if (err) {
+        if (err && !isEmptyObject(err)) {
           console.error("Error saving crawler data:", err);
         } else {
           console.log("Crawler data saved to disk");
@@ -322,7 +368,7 @@ distribution.node.start(async (server) => {
         console.log(`Target pages found: ${metrics.links.totalTargetsFound}`);
         console.log(`Pages processed: ${metrics.crawling.totalPagesProcessed}`);
         console.log(`Documents indexed: ${metrics.indexing.totalDocumentsIndexed}`);
-        console.log(`Terms extracted: ${metrics.indexing.totalTermsExtracted}`);
+        console.log(`Terms extracted: ${metrics.crawling.totalTermsExtracted}`);
         console.log(`Data downloaded: ${(metrics.crawling.totalBytesDownloaded/1024/1024).toFixed(2)}MB`);
         console.log(`Avg processing time: ${metrics.crawling.avgProcessingTime.toFixed(2)}ms`);
         console.log(`Avg indexing time: ${metrics.indexing.avgIndexTime.toFixed(2)}ms`);
@@ -362,7 +408,7 @@ distribution.node.start(async (server) => {
         console.log(`Target pages found: ${metrics.links.totalTargetsFound}`);
         console.log(`Pages processed: ${metrics.crawling.totalPagesProcessed}`);
         console.log(`Documents indexed: ${metrics.indexing.totalDocumentsIndexed}`);
-        console.log(`Terms extracted: ${metrics.indexing.totalTermsExtracted}`);
+        console.log(`Terms extracted: ${metrics.crawling.totalTermsExtracted}`);
         console.log(`Data downloaded: ${(metrics.crawling.totalBytesDownloaded/1024/1024).toFixed(2)}MB`);
         console.log(`Avg processing time: ${metrics.crawling.avgProcessingTime.toFixed(2)}ms`);
         console.log(`Avg indexing time: ${metrics.indexing.avgIndexTime.toFixed(2)}ms`);

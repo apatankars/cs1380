@@ -14,26 +14,21 @@ function store(config) {
       console.log(value);
     }
   };
+
   function getChosenNode(configuration, callback) {
     distribution.local.groups.get(context.gid, (err, group) => {
         if (err) {
           return null;
         }
-      // 2) Build array of NIDs from the group’s node configs
       const nodeConfigs = Object.values(group); // an array of {ip, port} objects
       const nids = nodeConfigs.map((nc) => id.getNID(nc));
-
-      // 3) Get the key id
       const kid = id.getID(configuration);
 
-      // 4) Use our chosen hash function to pick exactly one NID
       const chosenNID = context.hash(kid, nids);
-
-      // 5) find the node config whose NID matches chosenNID
       chosenNode = nodeConfigs.find((nc) => id.getNID(nc) === chosenNID);
       callback(null, chosenNode);
     });
-  }
+  };
 
   function stripPrefix(key) {
     console.log("STRIPPING KEY: ", key)
@@ -42,10 +37,8 @@ function store(config) {
     }
     console.log("STRIPPED KEY: ", key)
     return key;
-  }
+  };
 
-  /* For the distributed store service, the configuration will
-          always be a string */
   return {
     get: (configuration, callback) => {
       callback = callback || cb;

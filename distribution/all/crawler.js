@@ -16,9 +16,6 @@ function crawler(config) {
   };
 
   return {
-    /**
-     * Initialize the crawler service across all nodes
-     */
     initialize: (callback) => {
       callback = callback || cb;
       
@@ -36,9 +33,6 @@ function crawler(config) {
       });
     },
 
-    /**
-     * Add a link to the crawl queue on the appropriate node
-     */
     add_link_to_crawl: (link, callback) => {
       callback = callback || cb;
       
@@ -46,11 +40,8 @@ function crawler(config) {
         if (err) {
           return callback(new Error(`Failed to get group: ${err.message}`), null);
         }
-        
-        // Get a list of nodes
+
         const nodes = Object.values(group);
-        
-        // Determine which node should handle this link
         let targetNodeIndex = 0;
         const linkId = link || '';
         const kid = id.getID(linkId);
@@ -58,10 +49,8 @@ function crawler(config) {
         const chosenNID = id.naiveHash(kid, nids);
         targetNodeIndex = nids.findIndex(nid => nid === chosenNID);
         if (targetNodeIndex === -1) targetNodeIndex = 0;
-        
         const targetNode = nodes[targetNodeIndex];
         
-        // Send to the target node
         const remoteConfig = {
           service: 'crawler',
           method: 'add_link_to_crawl',
@@ -78,9 +67,6 @@ function crawler(config) {
       });
     },
 
-    /**
-     * Crawl one page from each node in the group
-     */
     crawl_one: (callback) => {
       callback = callback || cb;
       
@@ -94,9 +80,6 @@ function crawler(config) {
       });
     },
 
-    /**
-     * Get statistics from all nodes
-     */
     get_stats: (callback) => {
       callback = callback || cb;
       
@@ -110,9 +93,6 @@ function crawler(config) {
       });
     },
 
-    /**
-     * Save maps to disk on all nodes
-     */
     save_maps_to_disk: (callback) => {
       callback = callback || cb;
       
@@ -126,9 +106,6 @@ function crawler(config) {
       });
     },
 
-    /**
-     * Clean up resources on all nodes
-     */
     cleanup: (callback) => {
       callback = callback || cb;
       
