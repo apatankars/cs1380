@@ -73,6 +73,21 @@ function indexer(config) {
           callback(null, val);
         });
       });
+    },
+    get_stats: (callback) => {
+      callback = callback || cb;
+      
+      // Get stats from all nodes in the group
+      const remoteConfig = {
+        service: 'indexer',
+        method: 'get_stats'
+      };
+      
+      // Send the request to all nodes in the group
+      distribution[context.gid].comm.send([], remoteConfig, (errMap, statsMap) => {
+        // Just return the raw node stats - aggregation will be done by the caller
+        callback(errMap, statsMap);
+      });
     }
   };
 }

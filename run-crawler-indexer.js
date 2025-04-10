@@ -102,7 +102,7 @@ const createGroup = async (groupName, nodes) => {
 const getCrawlerStats = () => {
   return new Promise((resolve, reject) => {
     distribution.taxonomy.crawler.get_stats((err, crawlerStats) => {
-      if (err) {
+      if (err && !isEmptyObject(err)) {
         console.error("Error getting crawler crawlerStats:", err);
         reject(err);
       } else {
@@ -114,12 +114,12 @@ const getCrawlerStats = () => {
 
 const getIndexerStats = () => {
     return new Promise((resolve, reject => {
-        distribution.index.indexer.get_stats((err, crawlerStats) => {
-            if (err) {
-                console.error("Error getting crawler crawlerStats:", err);
+        distribution.index.indexer.get_stats((err, indexerStats) => {
+            if (err && !isEmptyObject(err)) {
+                console.error("Error getting indexer indexerStats:", err);
                 reject(err);
             } else {
-                resolve(crawlerStats);
+                resolve(indexerStats);
             }
         })
     }))
@@ -165,7 +165,7 @@ const aggregateMetrics = (crawlerStats, indexerStats) => {
       if (crawlerMetrics.crawling) {
         aggregated.crawling.totalPagesProcessed += crawlerMetrics.crawling.pagesProcessed || 0;
         aggregated.crawling.totalBytesDownloaded += crawlerMetrics.crawling.bytesDownloaded || 0;
-        aggregated.links.totalTargetsFound += crawlerMetrics.crawling.num_target_found || 0;
+        aggregated.links.totalTargetsFound += crawlerMetrics.crawling.targetsHit || 0;
         totalCrawlTime += crawlerMetrics.crawling.totalCrawlTime || 0;
         aggregated.crawling.totalBytesTransferred += crawlerMetrics.crawling.bytesTransferred || 0;
         aggregated.crawling.totalTermsExtracted += crawlerMetrics.crawling.termsExtracted || 0;
