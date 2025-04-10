@@ -1,267 +1,87 @@
 {
   "crawling": {
-    "pagesProcessed": 1495,
-    "totalCrawlTime": 190131,
-    "bytesDownloaded": 43289143,
-    "termsExtracted": 72147,
-    "avgProcessingTime": 127.17792642140468,
-    "targetsHit": 120,
+    "pagesProcessed": 196,
+    "totalCrawlTime": 31081,
+    "bytesDownloaded": 3766755,
+    "termsExtracted": 15009,
+    "avgProcessingTime": 158.5765306122449,
+    "targetsHit": 25,
     "bytesTransferred": null
   },
   "memory": {
     "peaks": [
       {
-        "timestamp": 1744249126311,
-        "heapUsed": 13,
-        "heapTotal": 51
-      },
-      {
-        "timestamp": 1744249186313,
-        "heapUsed": 23,
-        "heapTotal": 49
-      },
-      {
-        "timestamp": 1744249246319,
-        "heapUsed": 17,
-        "heapTotal": 49
-      },
-      {
-        "timestamp": 1744249306321,
-        "heapUsed": 24,
-        "heapTotal": 48
-      },
-      {
-        "timestamp": 1744249366321,
-        "heapUsed": 12,
-        "heapTotal": 15
-      },
-      {
-        "timestamp": 1744249426327,
-        "heapUsed": 29,
-        "heapTotal": 57
-      },
-      {
-        "timestamp": 1744249486333,
-        "heapUsed": 29,
-        "heapTotal": 51
-      },
-      {
-        "timestamp": 1744249546337,
-        "heapUsed": 29,
-        "heapTotal": 52
-      },
-      {
-        "timestamp": 1744249606341,
-        "heapUsed": 24,
-        "heapTotal": 52
-      },
-      {
-        "timestamp": 1744249666347,
-        "heapUsed": 25,
-        "heapTotal": 52
-      },
-      {
-        "timestamp": 1744249726347,
-        "heapUsed": 27,
+        "timestamp": 1744254430991,
+        "heapUsed": 30,
         "heapTotal": 59
       },
       {
-        "timestamp": 1744249786348,
-        "heapUsed": 21,
-        "heapTotal": 53
-      },
-      {
-        "timestamp": 1744249846348,
-        "heapUsed": 16,
-        "heapTotal": 51
-      },
-      {
-        "timestamp": 1744249906350,
-        "heapUsed": 22,
-        "heapTotal": 53
-      },
-      {
-        "timestamp": 1744249966351,
-        "heapUsed": 16,
-        "heapTotal": 51
-      },
-      {
-        "timestamp": 1744250026352,
-        "heapUsed": 27,
-        "heapTotal": 55
-      },
-      {
-        "timestamp": 1744250086353,
-        "heapUsed": 18,
-        "heapTotal": 53
-      },
-      {
-        "timestamp": 1744250146354,
+        "timestamp": 1744254490995,
         "heapUsed": 30,
-        "heapTotal": 52
+        "heapTotal": 53
       },
       {
-        "timestamp": 1744250206357,
-        "heapUsed": 31,
-        "heapTotal": 58
+        "timestamp": 1744254551001,
+        "heapUsed": 48,
+        "heapTotal": 70
       },
       {
-        "timestamp": 1744250266357,
+        "timestamp": 1744254611006,
         "heapUsed": 20,
-        "heapTotal": 56
+        "heapTotal": 51
       },
       {
-        "timestamp": 1744250326358,
-        "heapUsed": 26,
-        "heapTotal": 52
+        "timestamp": 1744254671008,
+        "heapUsed": 30,
+        "heapTotal": 54
       },
       {
-        "timestamp": 1744250386359,
-        "heapUsed": 17,
-        "heapTotal": 50
+        "timestamp": 1744254731015,
+        "heapUsed": 21,
+        "heapTotal": 54
       },
       {
-        "timestamp": 1744250446362,
-        "heapUsed": 26,
-        "heapTotal": 57
+        "timestamp": 1744254791018,
+        "heapUsed": 19,
+        "heapTotal": 23
       },
       {
-        "timestamp": 1744250506363,
-        "heapUsed": 20,
-        "heapTotal": 56
-      },
-      {
-        "timestamp": 1744250566369,
+        "timestamp": 1744254851020,
         "heapUsed": 15,
-        "heapTotal": 49
-      },
-      {
-        "timestamp": 1744250626376,
-        "heapUsed": 24,
-        "heapTotal": 57
-      },
-      {
-        "timestamp": 1744250686377,
-        "heapUsed": 19,
-        "heapTotal": 51
-      },
-      {
-        "timestamp": 1744250746381,
-        "heapUsed": 27,
-        "heapTotal": 51
-      },
-      {
-        "timestamp": 1744250806383,
-        "heapUsed": 17,
-        "heapTotal": 51
-      },
-      {
-        "timestamp": 1744250866386,
-        "heapUsed": 24,
-        "heapTotal": 55
-      },
-      {
-        "timestamp": 1744250926391,
-        "heapUsed": 22,
-        "heapTotal": 50
-      },
-      {
-        "timestamp": 1744250986392,
-        "heapUsed": 31,
         "heapTotal": 54
       },
       {
-        "timestamp": 1744251046393,
-        "heapUsed": 27,
-        "heapTotal": 54
-      },
-      {
-        "timestamp": 1744251106394,
-        "heapUsed": 19,
+        "timestamp": 1744254911069,
+        "heapUsed": 16,
         "heapTotal": 52
       },
       {
-        "timestamp": 1744251166395,
-        "heapUsed": 17,
-        "heapTotal": 53
-      },
-      {
-        "timestamp": 1744251226397,
-        "heapUsed": 34,
-        "heapTotal": 56
-      },
-      {
-        "timestamp": 1744251286397,
-        "heapUsed": 21,
-        "heapTotal": 53
-      },
-      {
-        "timestamp": 1744251346402,
-        "heapUsed": 31,
-        "heapTotal": 55
-      },
-      {
-        "timestamp": 1744251406402,
-        "heapUsed": 54,
-        "heapTotal": 79
-      },
-      {
-        "timestamp": 1744251466408,
-        "heapUsed": 57,
-        "heapTotal": 80
-      },
-      {
-        "timestamp": 1744251526407,
-        "heapUsed": 26,
-        "heapTotal": 54
-      },
-      {
-        "timestamp": 1744251586409,
-        "heapUsed": 26,
-        "heapTotal": 54
-      },
-      {
-        "timestamp": 1744251646411,
-        "heapUsed": 29,
-        "heapTotal": 55
-      },
-      {
-        "timestamp": 1744251706412,
-        "heapUsed": 21,
-        "heapTotal": 50
-      },
-      {
-        "timestamp": 1744251766413,
-        "heapUsed": 58,
-        "heapTotal": 83
-      },
-      {
-        "timestamp": 1744251826414,
-        "heapUsed": 19,
-        "heapTotal": 52
-      },
-      {
-        "timestamp": 1744251886415,
-        "heapUsed": 20,
-        "heapTotal": 52
-      },
-      {
-        "timestamp": 1744251946416,
-        "heapUsed": 33,
-        "heapTotal": 56
-      },
-      {
-        "timestamp": 1744252006422,
-        "heapUsed": 26,
-        "heapTotal": 52
-      },
-      {
-        "timestamp": 1744252066424,
+        "timestamp": 1744254971068,
         "heapUsed": 14,
-        "heapTotal": 49
+        "heapTotal": 16
+      },
+      {
+        "timestamp": 1744255031071,
+        "heapUsed": 16,
+        "heapTotal": 17
+      },
+      {
+        "timestamp": 1744255091077,
+        "heapUsed": 16,
+        "heapTotal": 17
+      },
+      {
+        "timestamp": 1744255151083,
+        "heapUsed": 24,
+        "heapTotal": 38
+      },
+      {
+        "timestamp": 1744255211084,
+        "heapUsed": 20,
+        "heapTotal": 50
       }
     ],
     "averages": []
   },
-  "startTime": 1744249066306
+  "startTime": 1744254370985
 }

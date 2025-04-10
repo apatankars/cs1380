@@ -149,6 +149,21 @@ function mem(config) {
 
     reconf: (configuration, callback) => {
     },
+    
+    clear: (configuration, callback) => {
+      callback = callback || cb;
+      
+      // Send clear command to all nodes in the group
+      const config = {
+        service: 'mem',
+        method: 'clear'
+      };
+      
+      distribution[context.gid].comm.send([configuration], config, (errMap, resMap) => {
+        // Even if some nodes fail, continue with those that succeeded
+        callback(errMap, resMap);
+      });
+    },
   };
 };
 

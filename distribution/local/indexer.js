@@ -1,7 +1,4 @@
 // distribution/local/indexer.js
-const util = require("../util/util");
-const { get } = require("./status");
-const id = util.id;
 
 // Default callback
 const cb = (e, v) => {
@@ -268,6 +265,14 @@ function index(configuration, callback) {
         }
         
         function finishProcessing(success) {
+          const memUsage = process.memoryUsage();
+          console.log(`Memory usage: ${Math.round(memUsage.heapUsed/1024/1024)}MB/${Math.round(memUsage.heapTotal/1024/1024)}MB`);
+          
+          // Force garbage collection if available and memory usage is high
+          if (global.gc && memUsage.heapUsed > 500 * 1024 * 1024) { // 500MB threshold
+              console.log("Forcing garbage collection");
+              global.gc();
+          }
           metrics.processingEndTime = Date.now();
           
           // Log performance metrics (GPT CODE!!!)

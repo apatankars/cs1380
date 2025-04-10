@@ -12,7 +12,6 @@ store/
 
 crawler-files/
 
-
 # in case a student adds an ssh key to the repo
 *.pem
 

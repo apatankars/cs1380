@@ -14,7 +14,7 @@ const crawl_nodes = [
 ];
 
 const index_nodes = [
-    { ip: '127.0.0.1', port: 8004 },
+  { ip: '127.0.0.1', port: 8004 },
   { ip: '127.0.0.1', port: 8005 },
   { ip: '127.0.0.1', port: 8006 },
   { ip: '127.0.0.1', port: 8007 },
@@ -23,7 +23,12 @@ const index_nodes = [
 const nodes = [
   ...crawl_nodes,
   ...index_nodes
-]
+];
+
+let documentsIndexedSinceLastPause = 0;
+let isPaused = false;
+let previousIndexedCount = 0;
+let recoveryPauseCount = 0;
 
 // Helper function to check if an object is empty
 function isEmptyObject(obj) {
@@ -241,6 +246,221 @@ const aggregateMetrics = (crawlerStats, indexerStats) => {
   return aggregated;
 };
 
+async function requestSystemCleanup() {
+  console.log("Initiating system cleanup...");
+  
+  try {
+    // Skip the problematic group-level API and directly clean each node
+    console.log("Performing direct node memory cleanup...");
+    
+    // Clean taxonomy nodes individually
+    let taxonomyCleanupSuccesses = 0;
+    for (const node of crawl_nodes) {
+      try {
+        await new Promise((resolve) => {
+          const nodeId = distribution.util.id.getSID(node);
+          const config = {
+            service: 'mem',
+            method: 'clear',
+            node: node
+          };
+          
+          console.log(`Cleaning taxonomy node ${nodeId} (${node.ip}:${node.port})...`);
+          distribution.local.comm.send([{ gid: 'taxonomy' }], config, (err, result) => {
+            if (err && typeof err === 'object' && Object.keys(err).length > 0) {
+              console.warn(`Warning: Failed to clear memory on taxonomy node ${nodeId}`);
+            } else {
+              console.log(`Memory cleared on taxonomy node ${nodeId}`);
+              taxonomyCleanupSuccesses++;
+            }
+            resolve();
+          });
+        });
+      } catch (e) {
+        console.error(`Error contacting taxonomy node:`, e);
+      }
+    }
+    
+    // Clean index nodes individually
+    let indexCleanupSuccesses = 0;
+    for (const node of index_nodes) {
+      try {
+        await new Promise((resolve) => {
+          const nodeId = distribution.util.id.getSID(node);
+          const config = {
+            service: 'mem',
+            method: 'clear',
+            node: node
+          };
+          
+          console.log(`Cleaning index node ${nodeId} (${node.ip}:${node.port})...`);
+          distribution.local.comm.send([{ gid: 'index' }], config, (err, result) => {
+            if (err && typeof err === 'object' && Object.keys(err).length > 0) {
+              console.warn(`Warning: Failed to clear memory on index node ${nodeId}`);
+            } else {
+              console.log(`Memory cleared on index node ${nodeId}`);
+              indexCleanupSuccesses++;
+            }
+            resolve();
+          });
+        });
+      } catch (e) {
+        console.error(`Error contacting index node:`, e);
+      }
+    }
+    
+    console.log(`Memory cleanup completed: ${taxonomyCleanupSuccesses}/${crawl_nodes.length} taxonomy nodes and ${indexCleanupSuccesses}/${index_nodes.length} index nodes successfully cleaned`);
+    
+    // Force GC on the main node if possible
+    if (global.gc) {
+      console.log("Forcing garbage collection on main node...");
+      global.gc();
+      console.log("Garbage collection completed on main node");
+    }
+    
+    // Save crawler state to disk during pause
+    await new Promise((resolve) => {
+      distribution.taxonomy.crawler.save_maps_to_disk((err, result) => {
+        if (err && !isEmptyObject(err)) {
+          console.warn("Warning: Failed to save crawler data:", err);
+        } else {
+          console.log("Crawler data saved to disk during pause");
+        }
+        resolve();
+      });
+    });
+    
+    // Check node health
+    console.log("Checking node health during pause...");
+    const nodeHealth = await checkNodeHealth();
+    console.log(`Node health check: ${nodeHealth.healthy} healthy, ${nodeHealth.unhealthy} unhealthy`);
+    
+    return true;
+  } catch (error) {
+    console.error("Error during system cleanup:", error);
+    return false;
+  }
+}
+
+// Add a node health check function
+// Improved node health check function with memory leak detection
+async function checkNodeHealth() {
+  const healthStatus = {
+    healthy: 0,
+    unhealthy: 0,
+    details: {},
+    potentialLeaks: []
+  };
+  
+  // Store the current memory snapshot to detect leaks
+  healthStatus.currentSnapshot = {};
+  
+  try {
+    // Check taxonomy nodes
+    await new Promise((resolve) => {
+      distribution.taxonomy.status.get('memory', (err, memoryMap) => {
+        if (err && !isEmptyObject(err)) {
+          console.warn("Could not check taxonomy node memory:", err);
+        } else {
+          for (const nodeId in memoryMap) {
+            const memory = memoryMap[nodeId];
+            const heapUsed = memory.heapUsed;
+            const heapTotal = memory.heapTotal;
+            const usageRatio = heapUsed / heapTotal;
+            
+            // Consider a node unhealthy if it's using >75% of its heap
+            const isHealthy = usageRatio < 0.85;
+            
+            if (isHealthy) {
+              healthStatus.healthy++;
+            } else {
+              healthStatus.unhealthy++;
+              
+              // Flag potential memory leak if usage is extremely high
+              if (usageRatio > 0.9) {
+                healthStatus.potentialLeaks.push({
+                  nodeId,
+                  type: 'taxonomy',
+                  memoryUsage: `${(heapUsed/1024/1024).toFixed(2)}MB/${(heapTotal/1024/1024).toFixed(2)}MB (${(usageRatio*100).toFixed(1)}%)`
+                });
+              }
+            }
+            
+            healthStatus.details[nodeId] = {
+              type: 'taxonomy',
+              heapUsed: `${(heapUsed/1024/1024).toFixed(2)}MB`,
+              heapTotal: `${(heapTotal/1024/1024).toFixed(2)}MB`,
+              usageRatio: `${(usageRatio*100).toFixed(1)}%`,
+              healthy: isHealthy
+            };
+            
+            // Store in current snapshot
+            healthStatus.currentSnapshot[nodeId] = { heapUsed, heapTotal };
+          }
+        }
+        resolve();
+      });
+    });
+    
+    // Check index nodes similarly
+    await new Promise((resolve) => {
+      distribution.index.status.get('memory', (err, memoryMap) => {
+        if (err && !isEmptyObject(err)) {
+          console.warn("Could not check index node memory:", err);
+        } else {
+          for (const nodeId in memoryMap) {
+            const memory = memoryMap[nodeId];
+            const heapUsed = memory.heapUsed;
+            const heapTotal = memory.heapTotal;
+            const usageRatio = heapUsed / heapTotal;
+            
+            const isHealthy = usageRatio < 0.75;
+            
+            if (isHealthy) {
+              healthStatus.healthy++;
+            } else {
+              healthStatus.unhealthy++;
+              
+              if (usageRatio > 0.9) {
+                healthStatus.potentialLeaks.push({
+                  nodeId,
+                  type: 'index',
+                  memoryUsage: `${(heapUsed/1024/1024).toFixed(2)}MB/${(heapTotal/1024/1024).toFixed(2)}MB (${(usageRatio*100).toFixed(1)}%)`
+                });
+              }
+            }
+            
+            healthStatus.details[nodeId] = {
+              type: 'index',
+              heapUsed: `${(heapUsed/1024/1024).toFixed(2)}MB`,
+              heapTotal: `${(heapTotal/1024/1024).toFixed(2)}MB`,
+              usageRatio: `${(usageRatio*100).toFixed(1)}%`,
+              healthy: isHealthy
+            };
+            
+            healthStatus.currentSnapshot[nodeId] = { heapUsed, heapTotal };
+          }
+        }
+        resolve();
+      });
+    });
+    
+    // Log memory leak warnings if found
+    if (healthStatus.potentialLeaks.length > 0) {
+      console.warn("⚠️ POTENTIAL MEMORY LEAKS DETECTED:");
+      healthStatus.potentialLeaks.forEach(leak => {
+        console.warn(`  - ${leak.type.toUpperCase()} node ${leak.nodeId}: ${leak.memoryUsage}`);
+      });
+      console.warn("Consider restarting these nodes if performance degrades");
+    }
+    
+    return healthStatus;
+  } catch (error) {
+    console.error("Error checking node health:", error);
+    return healthStatus;
+  }
+}
+
 // Main test function
 distribution.node.start(async (server) => {
   console.log("Starting crawler-indexer test with", nodes.length, "nodes");
@@ -266,25 +486,6 @@ distribution.node.start(async (server) => {
 
     console.log("Creating taxonomy group on index group...");
     await createGroupOnGroup('index', 'taxonomy', crawl_nodes);
-    
-    // Step 4: Setup global info for all nodes
-    // console.log("Setting up global info...");
-    // await new Promise((resolve, reject) => {
-    //   const globalInfo = {
-    //     nodes: nodes,
-    //     num_nodes: nodes.length
-    //   };
-      
-    //   distribution.taxonomy.mem.put(globalInfo, 'global_info', (err, val) => {
-    //     if (err) {
-    //       console.error("Error setting global info:", err);
-    //       reject(err);
-    //     } else {
-    //       console.log("Global info set successfully");
-    //       resolve(val);
-    //     }
-    //   });
-    // });
     
     // Step 5: Initialize the crawler service
     console.log("Initializing crawler service...");
@@ -328,6 +529,11 @@ distribution.node.start(async (server) => {
     
     // Setup periodic crawling
     const crawlInterval = setInterval(() => {
+      // Skip crawling if the system is in a recovery pause
+      if (isPaused) {
+        return;
+      }
+
       distribution.taxonomy.crawler.crawl_one((err, result) => {
         if (err && !isEmptyObject(err)) {
           console.error("Error during crawl iteration:", err);
@@ -354,12 +560,60 @@ distribution.node.start(async (server) => {
       });
     }, 30000);
     
-    // Report metrics every 10 seconds
+    // Add a recovery pause check in the metrics interval
     metricsInterval = setInterval(async () => {
       try {
         const crawlerStats = await getCrawlerStats();
         const indexerStats = await getIndexerStats();
         const metrics = aggregateMetrics(crawlerStats, indexerStats);
+        
+        // Check if we need to trigger a recovery pause
+        const currentIndexedCount = metrics.indexing.totalDocumentsIndexed;
+        const newlyIndexedDocs = currentIndexedCount - previousIndexedCount;
+        documentsIndexedSinceLastPause += newlyIndexedDocs;
+        previousIndexedCount = currentIndexedCount;
+        
+        // If we've indexed 10 or more documents since the last pause, trigger a recovery pause
+        if (documentsIndexedSinceLastPause >= 10 && !isPaused) {
+          recoveryPauseCount++;
+          isPaused = true;
+          documentsIndexedSinceLastPause = 0;
+          
+          console.log("\n=== SYSTEM RECOVERY PAUSE #" + recoveryPauseCount + " INITIATED ===");
+          console.log(`Time: ${new Date().toISOString()}`);
+          console.log(`Indexed documents before pause: ${currentIndexedCount}`);
+          console.log("Pausing operations for 60 seconds to allow system recovery");
+          
+          // Request garbage collection and cleanup
+          requestSystemCleanup()
+            .then(success => {
+              console.log(`System cleanup ${success ? "completed successfully" : "completed with some issues"}`);
+              
+              // Schedule the end of the pause
+              setTimeout(() => {
+                isPaused = false;
+                console.log("\n=== SYSTEM RECOVERY COMPLETE ===");
+                console.log(`Recovery pause #${recoveryPauseCount} completed at ${new Date().toISOString()}`);
+                console.log("Resuming normal operation");
+                
+                // After recovery, consider lowering crawl frequency if we've hit memory issues
+                if (recoveryPauseCount > 5) {
+                  console.log("Multiple recovery pauses needed - consider increasing pause frequency or reducing batch sizes");
+                }
+              }, 60000); // 1 minute pause
+            })
+            .catch(error => {
+              console.error("Error during system recovery:", error);
+              
+              // Even if cleanup fails, resume after the pause
+              setTimeout(() => {
+                isPaused = false;
+                console.log("\n=== SYSTEM RECOVERY COMPLETE (WITH ERRORS) ===");
+                console.log(`Recovery pause #${recoveryPauseCount} completed at ${new Date().toISOString()}`);
+                console.log("Resuming normal operation despite cleanup errors");
+              }, 60000);
+            });
+        }
         
         console.log("\n=== System Metrics ===");
         console.log(`Time: ${new Date().toISOString()}`);
@@ -372,6 +626,9 @@ distribution.node.start(async (server) => {
         console.log(`Data downloaded: ${(metrics.crawling.totalBytesDownloaded/1024/1024).toFixed(2)}MB`);
         console.log(`Avg processing time: ${metrics.crawling.avgProcessingTime.toFixed(2)}ms`);
         console.log(`Avg indexing time: ${metrics.indexing.avgIndexTime.toFixed(2)}ms`);
+        if (isPaused) {
+          console.log("STATUS: System in recovery pause");
+        }
         console.log("======================\n");
       } catch (err) {
         console.error("Error getting metrics:", err);
